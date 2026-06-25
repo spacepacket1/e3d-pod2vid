@@ -1,0 +1,18 @@
+{
+  "name": "e3d-pod2vid",
+  "version": "1.0.0",
+  "description": "AI-powered podcast-to-video pipeline. Semantic B-roll, voice synthesis, burned subtitles, YouTube publishing.",
+  "main": "yt_upload.js",
+  "scripts": {
+    "auth": "node yt_auth.js",
+    "upload": "node yt_upload.js",
+    "update": "node yt_update.js",
+    "announce": "node announce.js"
+  },
+  "keywords": ["notebooklm", "podcast", "video", "youtube", "ai", "b-roll", "tts"],
+  "author": "E3D Maps <https://maps.e3d.ai>",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.0"
+  }
+}

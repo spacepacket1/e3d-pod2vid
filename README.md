@@ -66,7 +66,31 @@ Available voices: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
 
 ---
 
-### 3. Generate a thumbnail
+### 3. Generate a YouTube Short
+
+```bash
+python3 make_short.py [output.mp4]
+```
+
+Produces a vertical 1080×1920 MP4 (≤60s) ready for YouTube Shorts, Instagram Reels, or TikTok:
+
+- **Silent hook clip** — eye-catching opener (no narration, grabs attention in the first 2 seconds)
+- **TTS voiceover** — OpenAI `tts-1-hd` narrates a built-in script about the tool
+- **Semantic Pexels B-roll** — lifestyle, car, and tech footage matched to each line
+- **Burned-in subtitles** — same PIL renderer as `pod2vid.py`, sized for mobile
+- **CTA card** — closing frame with GitHub URL and accent branding
+
+The script and B-roll queries are defined in the `SEGMENTS` list at the top of `make_short.py` — edit them to customise the script for your own content.
+
+Environment variables:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `SHORT_VOICE` | `onyx` | OpenAI TTS voice for narration |
+
+---
+
+### 4. Generate a thumbnail
 
 ```bash
 python3 make_thumbnail.py "Predictive GPS for Autonomous AI Agents" thumbnail.png /path/to/logo.png

@@ -101,13 +101,15 @@ async function postX(url, message) {
 }
 
 async function postMoltbook(url, message) {
-  const key     = process.env.MOLTBOOK_API_KEY;
-  const apiUrl  = process.env.MOLTBOOK_API_URL || 'https://moltbook.com';
+  const key      = process.env.MOLTBOOK_API_KEY;
+  const apiUrl   = process.env.MOLTBOOK_API_URL || 'https://www.moltbook.com/api/v1';
+  const submolt  = process.env.MOLTBOOK_SUBMOLT || 'agentfinance';
+  const title    = process.env.MOLTBOOK_TITLE   || message.split('\n')[0].slice(0, 300);
   if (!key) return { platform: 'Moltbook', skipped: true };
   const res = await post(
     `${apiUrl}/posts`,
     { headers: { 'x-api-key': key } },
-    { content: message, type: 'social' },
+    { title, content: message, submolt_name: submolt, type: 'text' },
   );
   return { platform: 'Moltbook', status: res.status, ok: res.status === 200 || res.status === 201 };
 }

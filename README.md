@@ -113,7 +113,15 @@ node yt_update.js VIDEO_ID thumbnail.png
 node announce.js https://www.youtube.com/watch?v=VIDEO_ID "New episode: Predictive GPS for Autonomous AI Agents"
 ```
 
-Posts simultaneously to every platform that has credentials configured in `.env`. Platforms with no credentials are silently skipped.
+Posts simultaneously to all configured platforms. Platforms with no credentials are silently skipped.
+
+| Platform | Credential(s) needed |
+|---|---|
+| Discord | `DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID` |
+| Telegram | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` |
+| X (Twitter) | `X_ACCESS_TOKEN` |
+| Moltbook | `MOLTBOOK_API_KEY` |
+| LinkedIn | `linkedin-tokens.json` with `person_urn` (run `node linkedin_auth.js`) |
 
 ---
 
@@ -212,9 +220,9 @@ Copy `.env.example` to `.env` and fill in the keys you need.
 | `X_ACCESS_TOKEN` | `announce.js` | OAuth2 bearer token |
 | `MOLTBOOK_API_KEY` | `announce.js` | Optional |
 | `MOLTBOOK_SUBMOLT` | `announce.js` | Submolt name (default: `agentfinance`) |
-| `LINKEDIN_CLIENT_ID` | `linkedin_auth.js` | From LinkedIn Developer Portal |
+| `LINKEDIN_CLIENT_ID` | `linkedin_auth.js` | From [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps) |
 | `LINKEDIN_CLIENT_SECRET` | `linkedin_auth.js` | From LinkedIn Developer Portal |
-| `LINKEDIN_TOKEN_FILE` | `announce.js` | Default: `linkedin-tokens.json` |
+| `LINKEDIN_TOKEN_FILE` | `announce.js` | Default: `linkedin-tokens.json` — must contain `person_urn` |
 | `VOICE_A` | `tts_replace.py` | Default: `onyx` |
 | `VOICE_B` | `tts_replace.py` | Default: `nova` |
 | `SPEAKER_A_NAME` | `pod2vid.py` | Subtitle label (default: `Host`) |

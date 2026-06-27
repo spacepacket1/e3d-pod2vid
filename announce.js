@@ -100,6 +100,31 @@ async function postX(url, message) {
   return { platform: 'X (Twitter)', status: res.status, ok: !!body.data?.id };
 }
 
+async function postLinkedIn(url, message) {
+  const tokenFile = process.env.LINKEDIN_TOKEN_FILE || 'linkedin-tokens.json';
+  if (!require('fs').existsSync(tokenFile)) return { platform: 'LinkedIn', skipped: true };
+  const tokens = JSON.parse(require('fs').readFileSync(tokenFile));
+  if (!tokens.access_token) return { platform: 'LinkedIn', skipped: true };
+  const author = tokens.person_urn;
+  if (!author) return { platform: 'LinkedIn', skipped: true, reason: 'no person_urn in token file' };
+  const payload = JSON.stringify({
+    author,
+    commentary: message,
+    visibility: 'PUBLIC',
+    distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] },
+    lifecycleState: 'PUBLISHED',
+    isReshareDisabledByAuthor: false,
+  });
+  const res = await post('https://api.linkedin.com/rest/posts', {
+    headers: {
+      'Authorization':    `Bearer ${tokens.access_token}`,
+      'LinkedIn-Version': '202506',
+      'X-Restli-Protocol-Version': '2.0.0',
+    },
+  }, payload);
+  return { platform: 'LinkedIn', status: res.status, ok: res.status === 201 };
+}
+
 async function postMoltbook(url, message) {
   const key      = process.env.MOLTBOOK_API_KEY;
   const apiUrl   = process.env.MOLTBOOK_API_URL || 'https://www.moltbook.com/api/v1';
@@ -127,6 +152,7 @@ async function run() {
     postTelegram(YT_URL, message),
     postX(YT_URL, message),
     postMoltbook(YT_URL, message),
+    postLinkedIn(YT_URL, message),
   ]);
 
   for (const r of results) {

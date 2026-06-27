@@ -15,8 +15,10 @@
  *   TELEGRAM_BOT_TOKEN    format: 1234567890:AAF...
  *   TELEGRAM_CHAT_ID      numeric chat/channel ID (negative for groups/channels)
  *
- *   X_ACCESS_TOKEN        OAuth2 access token
- *   X_ACCESS_SECRET       (OAuth1 legacy — leave blank if using OAuth2 only)
+ *   X_CLIENT_ID           OAuth2 client ID (needed for token refresh)
+ *   X_CLIENT_SECRET       OAuth2 client secret (needed for token refresh)
+ *   X_ACCESS_TOKEN        OAuth2 access token (auto-refreshed if X_CLIENT_ID/SECRET set)
+ *   X_TOKEN_FILE          path to token file for refresh (default: agents/scripts/x-oauth2-tokens.json)
  *
  *   MOLTBOOK_API_KEY      format: moltbook_sk_...
  *   MOLTBOOK_API_URL      (default: https://moltbook.com)
@@ -25,8 +27,9 @@
 'use strict';
 require('dotenv').config();
 
+const fs     = require('fs');
 const https  = require('https');
-const { URL } = require('url');
+const { URL, URLSearchParams } = require('url');
 
 const YT_URL = process.argv[2];
 const CUSTOM = process.argv[3] || '';
@@ -60,6 +63,49 @@ function post(url, opts, payload) {
   });
 }
 
+// ── X token refresh ───────────────────────────────────────────────────────────
+
+async function getXToken() {
+  const envToken    = process.env.X_ACCESS_TOKEN;
+  const clientId    = process.env.X_CLIENT_ID;
+  const clientSecret= process.env.X_CLIENT_SECRET;
+  const tokenFile   = process.env.X_TOKEN_FILE || null;
+
+  // Load token file if present (has expiry + refresh_token)
+  let stored = null;
+  if (tokenFile && fs.existsSync(tokenFile)) {
+    try { stored = JSON.parse(fs.readFileSync(tokenFile)); } catch {}
+  }
+
+  const expires = stored?.expires_at || 0;
+  const needsRefresh = expires && expires < Date.now() + 60_000;
+
+  if (needsRefresh && stored?.refresh_token && clientId && clientSecret) {
+    const body = new URLSearchParams({
+      grant_type:    'refresh_token',
+      refresh_token: stored.refresh_token,
+      client_id:     clientId,
+    }).toString();
+    const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const res  = await post('https://api.twitter.com/2/oauth2/token',
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Basic ${auth}` } },
+      body,
+    );
+    const r = JSON.parse(res.body);
+    if (r.access_token) {
+      r.expires_at = Date.now() + (r.expires_in || 7200) * 1000;
+      r.client_id  = clientId;
+      if (tokenFile) fs.writeFileSync(tokenFile, JSON.stringify(r, null, 2));
+      // Update process.env so the new token is used if called again
+      process.env.X_ACCESS_TOKEN = r.access_token;
+      return r.access_token;
+    }
+    console.warn('  X token refresh failed:', r.error || res.status);
+  }
+
+  return stored?.access_token || envToken || null;
+}
+
 // ── Platforms ─────────────────────────────────────────────────────────────────
 
 async function postDiscord(url, message) {
@@ -88,7 +134,7 @@ async function postTelegram(url, message) {
 }
 
 async function postX(url, message) {
-  const token = process.env.X_ACCESS_TOKEN;
+  const token = await getXToken();
   if (!token) return { platform: 'X (Twitter)', skipped: true };
   const tweet = message.length <= 280 ? message : message.slice(0, 277) + '...';
   const res = await post(

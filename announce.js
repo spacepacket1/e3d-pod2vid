@@ -127,7 +127,7 @@ async function postTelegram(url, message) {
   const res = await post(
     `https://api.telegram.org/bot${token}/sendMessage`,
     {},
-    { chat_id: chatId, text: message, parse_mode: 'Markdown' },
+    { chat_id: chatId, text: message },
   );
   const body = JSON.parse(res.body);
   return { platform: 'Telegram', status: res.status, ok: body.ok };

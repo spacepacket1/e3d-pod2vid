@@ -66,7 +66,47 @@ Available voices: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
 
 ---
 
-### 3. Generate a YouTube Short
+### 3. Generate a YouTube Short from an E3D Maps signal (automated)
+
+```bash
+python3 signal_short.py [--dry-run] [--force]
+```
+
+Pulls live signals from [maps.e3d.ai](https://maps.e3d.ai), picks the most significant one, generates a script, renders a Short, uploads to YouTube, and posts to all social platforms — automatically, daily.
+
+**Filtering criteria** (any one qualifies):
+- Confidence ≥ `CONF_THRESHOLD` (default: 78%)
+- `risk_level == 'high'` AND confidence ≥ 55%
+- `signal_strength == 'strong'`
+- 3+ independent signals converging on the same destination (cluster alert)
+
+**Flags:**
+- `--dry-run` — generate the script and queries but skip render/upload
+- `--force` — re-post even if that signal was already posted today
+
+**Environment variables:**
+
+| Variable | Notes |
+|---|---|
+| `MAPS_URL` | Default: `https://maps.e3d.ai` |
+| `MAPS_INTERNAL_KEY` | Optional — endpoint is public |
+| `CONF_THRESHOLD` | Float 0-1, default `0.78` |
+
+State (which signals have been posted today) is written to `output/signal-short-state.json`.
+
+**Schedule with PM2:**
+
+```bash
+# Start daily cron at 14:00 UTC
+pm2 start ecosystem.config.js --env production
+
+# View logs
+pm2 logs signal-short
+```
+
+---
+
+### 4. Generate a YouTube Short (custom script)
 
 ```bash
 python3 make_short.py [output.mp4]
@@ -90,7 +130,7 @@ Environment variables:
 
 ---
 
-### 4. Generate a thumbnail
+### 5. Generate a thumbnail
 
 ```bash
 python3 make_thumbnail.py "Predictive GPS for Autonomous AI Agents" thumbnail.png /path/to/logo.png
@@ -100,7 +140,7 @@ Outputs a 1280×720 PNG with title, accent stripe, and optional logo overlay. Pu
 
 ---
 
-### 4. Upload to YouTube
+### 6. Upload to YouTube
 
 **First time: authorize your account**
 
@@ -131,7 +171,7 @@ node yt_update.js VIDEO_ID thumbnail.png
 
 ---
 
-### 5. Announce on social media
+### 7. Announce on social media
 
 ```bash
 node announce.js https://www.youtube.com/watch?v=VIDEO_ID "New episode: Predictive GPS for Autonomous AI Agents"
@@ -149,7 +189,7 @@ Posts simultaneously to all configured platforms. Platforms with no credentials 
 
 ---
 
-### 6. (Optional) LinkedIn setup
+### 8. (Optional) LinkedIn setup
 
 LinkedIn's API requires a few one-time setup steps before `announce.js` can post there.
 

@@ -338,6 +338,12 @@ def run():
     segs    = result.get('segments', [])
 
     log(f'Title: {title}')
+    # Append fixed sponsor segment before the CTA card
+    segs.append({
+        'text':  'Signal brought to you by the E3D Token — the fuel of the navigation network.',
+        'query': 'energy fuel power network glowing digital',
+    })
+
     log(f'Segments ({len(segs)}):')
     for i, s in enumerate(segs):
         log(f'  {i+1}. "{s["text"]}"  →  [{s["query"]}]')

@@ -6,7 +6,7 @@
 - Burned-in subtitles (no ffmpeg libass required — pure Pillow)
 - Optional OpenAI TTS voice replacement (swap out NotebookLM / AI voices)
 - YouTube upload + description/thumbnail update
-- One-shot multi-platform social posting (Discord, Telegram, X, Moltbook)
+- One-shot multi-platform social posting (Discord, Telegram, X, Moltbook, LinkedIn)
 
 ---
 
@@ -117,6 +117,85 @@ Posts simultaneously to every platform that has credentials configured in `.env`
 
 ---
 
+### 6. (Optional) LinkedIn setup
+
+LinkedIn's API requires a few one-time setup steps before `announce.js` can post there.
+
+**Step 1 — Create a LinkedIn app**
+
+Go to [linkedin.com/developers/apps](https://www.linkedin.com/developers/apps/new) and create an app. Under the **Auth** tab, add this as an authorized redirect URL:
+
+```
+https://www.linkedin.com/developers/tools/oauth/redirect
+```
+
+**Step 2 — Add required products**
+
+Under the **Products** tab, request access to both:
+- **Share on LinkedIn** — grants `w_member_social` scope (post on behalf of user)
+- **Sign In with LinkedIn using OpenID Connect** — grants `openid profile` scopes (needed to resolve your person URN)
+
+Both are typically approved instantly for personal apps.
+
+**Step 3 — Verify company association** *(if prompted)*
+
+LinkedIn may ask you to verify a company page association. Open the verification URL while logged in as a Page Admin and approve it.
+
+**Step 4 — Authorize and get tokens**
+
+Add your app credentials to `.env`:
+
+```
+LINKEDIN_CLIENT_ID=your_client_id
+LINKEDIN_CLIENT_SECRET=your_client_secret
+```
+
+Then run:
+
+```bash
+node linkedin_auth.js
+```
+
+Open the printed URL on any device. After approving, paste the redirect URL back. Tokens are saved to `linkedin-tokens.json`.
+
+**Step 5 — Add your person URN**
+
+LinkedIn's API requires your encoded person ID (not your numeric member ID). To find it:
+
+1. Go to your LinkedIn profile in a browser
+2. View Page Source (Cmd+U / Ctrl+U) and search for `urn:li:member:`
+3. Note the numeric ID (e.g. `4435724`)
+4. Make a test API call — the error response will reveal your encoded person URN (e.g. `urn:li:person:2KqUAyg4oY`)
+
+Or run this one-liner after getting a token:
+
+```bash
+node -e "
+const https = require('https');
+const t = JSON.parse(require('fs').readFileSync('linkedin-tokens.json'));
+// Replace MEMBER_ID with your numeric ID from page source
+const body = JSON.stringify({author:'urn:li:member:MEMBER_ID',commentary:'test',visibility:'PUBLIC',distribution:{feedDistribution:'MAIN_FEED',targetEntities:[],thirdPartyDistributionChannels:[]},lifecycleState:'PUBLISHED',isReshareDisabledByAuthor:false});
+const u = require('url').parse('https://api.linkedin.com/rest/posts');
+const r = https.request(Object.assign(u,{method:'POST',headers:{'Authorization':'Bearer '+t.access_token,'Content-Type':'application/json','Content-Length':Buffer.byteLength(body),'LinkedIn-Version':'202506','X-Restli-Protocol-Version':'2.0.0'}}),res=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>console.log(d.slice(0,300)));});
+r.write(body);r.end();
+"
+```
+
+The error message will contain your encoded URN. Save it:
+
+```bash
+node -e "
+const fs = require('fs');
+const t = JSON.parse(fs.readFileSync('linkedin-tokens.json'));
+t.person_urn = 'urn:li:person:YOUR_ENCODED_ID';
+fs.writeFileSync('linkedin-tokens.json', JSON.stringify(t, null, 2));
+"
+```
+
+Once `linkedin-tokens.json` contains `person_urn`, `announce.js` will post to LinkedIn automatically.
+
+---
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in the keys you need.
@@ -132,6 +211,10 @@ Copy `.env.example` to `.env` and fill in the keys you need.
 | `TELEGRAM_CHAT_ID` | `announce.js` | Optional |
 | `X_ACCESS_TOKEN` | `announce.js` | OAuth2 bearer token |
 | `MOLTBOOK_API_KEY` | `announce.js` | Optional |
+| `MOLTBOOK_SUBMOLT` | `announce.js` | Submolt name (default: `agentfinance`) |
+| `LINKEDIN_CLIENT_ID` | `linkedin_auth.js` | From LinkedIn Developer Portal |
+| `LINKEDIN_CLIENT_SECRET` | `linkedin_auth.js` | From LinkedIn Developer Portal |
+| `LINKEDIN_TOKEN_FILE` | `announce.js` | Default: `linkedin-tokens.json` |
 | `VOICE_A` | `tts_replace.py` | Default: `onyx` |
 | `VOICE_B` | `tts_replace.py` | Default: `nova` |
 | `SPEAKER_A_NAME` | `pod2vid.py` | Subtitle label (default: `Host`) |
@@ -175,6 +258,7 @@ Queries are cached so re-runs or TTS voice swaps don't re-spend API credits. ~82
 - OpenAI (GPT-4o-mini + TTS)
 - Pexels (B-roll clips, free tier fine for personal use)
 - YouTube Data API v3 (via Google Cloud Console)
+- LinkedIn API (via [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps)) — optional, for posting
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Project:** e3d-pod2vid  
 **Feature:** Hosted `pod2vid.e3d.ai` product, E3D-paid API endpoints, wallet UI, and agent automation  
-**Target repos:** `/home/ubuntu/e3d-pod2vid`, `/home/ubuntu/spacepacket/server`, `/home/ubuntu/e3d-agent`  
+**Target repos:** `/home/ubuntu/e3d-pod2vid`, `/home/ubuntu/e3d-pod2vid-service`, `/home/ubuntu/spacepacket/server`, `/home/ubuntu/e3d-agent`  
 **Status:** Draft for discussion  
 **Priority:** High  
 **Implementation mode:** Phased, suitable for codex-spec-runner  
@@ -213,6 +213,34 @@ The first-run experience should include:
 - a plain explanation of what E3D credits pay for and why holding E3D is cheaper;
 - copyable API and `e3d-agent` examples generated from the current job options.
 
+### 2.2 v1 Scope
+
+This table is the authoritative boundary between what Phase 1–6 implement and what Phase 7 defers. The full product spec (sections 1–11) describes both v1 and v1.1 together as the intended product. Only the items marked **v1.1** below are deferred; everything else is in scope for the current implementation run.
+
+| Feature | v1 | v1.1 |
+|---|:---:|:---:|
+| Payment/credits with holder discount and burn tracking | ✓ | |
+| Core job API: quote, submit, status, artifacts, cancel | ✓ | |
+| Webhooks: submit with URL, delivery, retry, fallback polling | ✓ | |
+| OpenAPI + `llms.txt` + `.well-known/agent-capabilities.json` | ✓ | |
+| IPFS archive: `archive-ipfs` endpoint + Pinata integration | ✓ | |
+| `mint-nft` endpoint scaffolded (returns 501 until v1.1) | ✓ | |
+| Revisions: thumbnail, metadata/social copy, subtitle style | ✓ | |
+| 6 caption/style templates | ✓ | |
+| Preview step before paid submission | ✓ | |
+| 3 public sample outputs at share-worthy quality | ✓ | |
+| Brand kit: end card toggle, watermark by tier | ✓ | |
+| `e3d-agent pod2vid` commands including archive | ✓ | |
+| NFT mint full implementation (ERC-721, E3DNFTManager, wallet confirmation) | | ✓ |
+| `e3d-agent pod2vid mint-nft` command | | ✓ |
+| NFT provenance panel in UI | | ✓ |
+| Revisions: end card regen, B-roll regen, voice regen | | ✓ |
+| Brand kit: logo upload, primary color | | ✓ |
+| 4 visual style presets beyond default | | ✓ |
+| Output variants (up to 3 candidate cuts per short) | | ✓ |
+
+The `capabilities` response should reflect actual v1 availability: set `nftMintAvailable: false` until Phase 7 ships.
+
 ---
 
 ## 3. Non-Goals
@@ -380,26 +408,36 @@ The UI should be dense and operational. Avoid a marketing-only hero. Use the pro
 ### 6.1 Components
 
 ```text
-pod2vid.e3d.ai UI
-  -> hosted static/Node UI in /home/ubuntu/e3d-pod2vid
-  -> calls Spacepacket API
+e3d-pod2vid-service  (/home/ubuntu/e3d-pod2vid-service)
+  -> UI: Vite/React app served from pod2vid.e3d.ai
+  -> Worker daemon: PM2 process that picks jobs from queue and shells out to e3d-pod2vid
+  -> Nginx config and deployment scripts
 
-spacepacket/server Pod2Vid API
-  -> product payment quote/purchase/balance/spend
-  -> job creation/status/artifact endpoints
-  -> internal service auth for spend operations
+e3d-pod2vid  (/home/ubuntu/e3d-pod2vid)
+  -> Pipeline scripts: pod2vid.py, make_short.py, tts_replace.py, announce.js, yt_upload.js, etc.
+  -> Job runner wrapper: bin/pod2vid-job.py — the stable interface the worker calls
+  -> Used directly by developers who want to run the pipeline locally
+
+spacepacket/server  (/home/ubuntu/spacepacket/server)
+  -> Pod2Vid API routes: /api/pod2vid/*
+  -> Product payment quote/purchase/balance/spend
+  -> Job creation/status/artifact endpoints
+  -> Internal service auth for spend operations
   -> E3D holder discount logic (20% off for qualifying wallets)
-  -> burn tracking (5% of each job's credit cost flagged for burn)
-  -> optional E3D/IPFS archive and NFT mint orchestration
+  -> Burn tracking (5% of each job's credit cost flagged for burn)
+  -> IPFS archive orchestration
 
-pod2vid worker
-  -> local process/PM2 worker in /home/ubuntu/e3d-pod2vid
-  -> runs existing Python/Node media scripts
-  -> writes artifacts to configured storage
-
-e3d-agent Pod2Vid client
+e3d-agent  (/home/ubuntu/e3d-agent)
   -> CLI and reusable client for automated credit purchase and job execution
 ```
+
+The worker in `e3d-pod2vid-service` calls into `e3d-pod2vid` by path:
+
+```bash
+python3 /home/ubuntu/e3d-pod2vid/bin/pod2vid-job.py <manifest-path>
+```
+
+The pipeline repo has no knowledge of the service. The service depends on the pipeline being present on the same server.
 
 ### 6.2 Payment Model
 
@@ -1413,14 +1451,16 @@ Repos:
 /home/ubuntu/e3d-pod2vid
 ```
 
-Tasks:
+**v1 tasks:**
 
 - add Pod2Vid route module in Spacepacket;
 - implement health/capabilities/job quote/job submit/status/artifact endpoints;
 - implement OpenAPI, `llms.txt`, and `.well-known/agent-capabilities.json` routes;
 - implement webhook URL validation, delivery, retry, and fallback polling behavior;
-- implement revision and publish endpoint scaffolding;
-- implement IPFS archive and NFT mint endpoint scaffolding using E3D core storage/NFT infrastructure;
+- implement revision and publish endpoint scaffolding (all revision types are routed; v1 worker only executes thumbnail, metadata, subtitle style);
+- implement IPFS archive endpoint using E3D core storage infrastructure (`uploadToIPFS.js` or wrapper);
+- implement `mint-nft` endpoint scaffolded to return HTTP 501 with a `v1.1` message;
+- set `nftMintAvailable: false` in capabilities response;
 - implement transcript input validation and transcript job submission;
 - expose tier/limit metadata through capabilities and quote responses;
 - expose holder discount and burn amount in capabilities and quote;
@@ -1437,11 +1477,12 @@ Acceptance:
 - insufficient credits return HTTP 402 with `upgradePath` and `getE3DUrl` in body;
 - duplicate `Idempotency-Key` does not double-spend;
 - completed test jobs expose artifacts without arbitrary file read risk;
-- capabilities endpoint is self-describing without external documentation;
+- capabilities endpoint is self-describing without external documentation and shows `nftMintAvailable: false`;
 - OpenAPI, `llms.txt`, and agent-capabilities endpoints are reachable;
 - webhook dry-run delivery can be tested locally and failed delivery does not break polling;
 - revision jobs preserve parent-child relationship and quote before spend;
-- IPFS archive and NFT mint endpoints validate consent, job ownership/auth, and artifact availability;
+- IPFS archive endpoint validates consent, job ownership/auth, and artifact availability;
+- `mint-nft` endpoint returns 501 with a clear v1.1 message;
 - "Get E3D" URL is confirmed live and documented.
 
 ### Phase 3: Pod2Vid Worker Wrapper
@@ -1452,63 +1493,95 @@ Repo:
 /home/ubuntu/e3d-pod2vid
 ```
 
-Tasks:
+**v1 tasks:**
 
 - add a job runner wrapper around existing scripts;
 - add dry-run mode that validates inputs and writes a fake artifact manifest;
 - support transcript-driven jobs by generating or accepting narration input according to preset;
-- support style template, visual style, brand kit, and platform metadata fields in the manifest;
-- support revision job modes for thumbnail, metadata, subtitle style, end card, B-roll, and voice where technically feasible in v1;
+- support 6 caption/style templates and platform metadata fields in the manifest;
+- support end card toggle and watermark-by-tier from brand kit options;
+- support revision job modes for thumbnail, metadata/social copy, and subtitle style;
 - support IPFS archive manifests with local artifact IDs, CIDs, gateway URLs, checksums, and local retention timestamps;
 - support rehydrating archived MP4 artifacts from IPFS/gateway into temp storage for later publishing when local retention has expired;
 - add structured progress/status output;
 - ensure output paths are deterministic under `POD2VID_STORAGE_DIR`;
 - document required API keys for each preset.
 
+**v1.1 tasks (deferred — do not implement in Phase 3):**
+
+- revision modes for end card regen, B-roll regen, and voice regen;
+- brand kit logo upload and primary color rendering;
+- 4 visual style presets beyond default;
+- output variant generation (up to 3 candidate cuts).
+
 Acceptance:
 
 - dry-run job completes locally without external API calls;
 - real render path still supports the existing `pod2vid.py` behavior;
+- thumbnail, metadata, and subtitle style revisions complete against a completed dry-run job;
+- IPFS archive manifests are written with checksums and local retention timestamps;
+- rehydration from IPFS completes when a local MP4 is unavailable;
 - worker failure records a clear error code and user-safe message;
 - no outputs are written into the git repo by default.
 
-### Phase 4: Hosted UI
+### Phase 4: Hosted UI and Worker Daemon
 
 Repo:
 
 ```text
-/home/ubuntu/e3d-pod2vid
+/home/ubuntu/e3d-pod2vid-service
 ```
 
-Tasks:
+Create this repo if it does not exist. It is a new repository — do not add these files to `/home/ubuntu/e3d-pod2vid`.
+
+**v1 tasks:**
+
+Worker daemon (new in `e3d-pod2vid-service`):
+
+- implement a PM2 worker process that polls the job queue from Spacepacket and dispatches jobs;
+- shell out to `/home/ubuntu/e3d-pod2vid/bin/pod2vid-job.py <manifest-path>` for each job;
+- read structured stdout/manifest output and update job status via the Spacepacket API;
+- handle worker errors, timeouts, and unexpected exits cleanly;
+- write a `pod2vid-worker` PM2 app entry in `ecosystem.config.js`.
+
+UI (new in `e3d-pod2vid-service`):
 
 - implement the workspace UI;
 - implement Upload, Source URL, Transcript, and Sample input modes;
-- implement public sample gallery and preview frame;
-- implement style templates, visual style presets, and brand kit controls;
+- implement public sample gallery (at least 3 real outputs) and preview frame;
+- implement 6 caption/style template selector and preview;
+- implement brand kit: end card toggle and watermark display by tier;
 - implement tier/limit comparison and remaining free-attempt display;
 - implement wallet connection;
 - implement holder discount display in quote panel;
 - implement quote/purchase/balance/job submission/status/artifact flows;
 - implement "Get E3D" button linking to `POD2VID_GET_E3D_URL`;
 - implement "Made with Pod2Vid" end card toggle and rebate display;
-- implement completed-job artifact viewer and revision actions;
-- implement IPFS archive and NFT provenance panels with explicit consent flows;
+- implement completed-job artifact viewer with revision actions for thumbnail, metadata, and subtitle style;
+- implement IPFS archive panel with consent flow, `ipfs://` URIs, gateway URLs, and archive manifest;
 - add agent-mode examples in the UI;
-- configure build output for Nginx/static hosting or a UI server.
+- configure build output for Nginx/static hosting or a Node UI server.
+
+**v1.1 tasks (deferred — do not implement in Phase 4, add to `e3d-pod2vid-service` in Phase 7):**
+
+- NFT provenance panel and mint confirmation flow;
+- revision actions for end card, B-roll, and voice;
+- brand kit logo upload and primary color controls;
+- 4 visual style preset selector;
+- output variant selection panel.
 
 Acceptance:
 
 - user can connect wallet and see Pod2Vid credit balance and holder discount status;
 - user can inspect at least 3 public sample outputs before submitting a job;
-- user can preview aspect ratio, subtitle style, brand color, watermark/end card state, and metadata before paid submission;
+- user can preview aspect ratio, caption style, watermark/end card state, and metadata before paid submission;
 - user can paste a transcript, see length/limit feedback, quote it (with discount applied), and submit an eligible job;
 - new user can run a limited free/sample render without exceeding free-tier caps;
 - user can get a quote and register a purchase transaction;
 - user can submit a paid dry-run job and see completion;
-- user can run a quoted revision against a completed dry-run job;
+- user can run quoted thumbnail, metadata, and subtitle style revisions against a completed dry-run job;
 - user can archive a completed eligible dry-run job to IPFS and see returned IPFS/gateway URLs;
-- user can start NFT mint flow only after seeing and confirming public metadata;
+- UI shows `nftMintAvailable: false` state and does not expose a broken mint flow;
 - UI blocks render submission when no credit key/balance is available and shows "Get E3D" path;
 - UI blocks or explains jobs that exceed tier artifact/input limits;
 - responsive layout works on desktop and mobile.
@@ -1521,31 +1594,40 @@ Repo:
 /home/ubuntu/e3d-agent
 ```
 
-Tasks:
+**v1 tasks:**
 
 - add `Pod2VidClient`;
 - generalize buy-credit logic beyond hardcoded `maps`;
 - add `pod2vid` CLI group;
 - store and read `E3D_POD2VID_CREDIT_KEY`;
-- add webhook and revision commands;
-- add IPFS archive and NFT mint commands;
-- add examples, docs, and OpenAPI file;
+- add webhook command (`--webhook` flag on render);
+- add revision command (`revise`) for thumbnail, metadata, and subtitle style;
+- add IPFS archive command (`archive`);
+- add examples 08–12 and docs;
+- add OpenAPI file;
 - add tests for command parsing, quote/purchase product selection, and job client behavior.
+
+**v1.1 tasks (deferred — do not implement in Phase 5):**
+
+- `mint-nft` command and example 13;
+- revision commands for end card, B-roll, and voice.
 
 Acceptance:
 
 - `e3d-agent pod2vid buy-credits --amount 1000` quotes `product=pod2vid` and shows holder discount;
 - `e3d-agent pod2vid render --dry-run --wait` completes against a local test server/mock;
+- `e3d-agent pod2vid archive --job pod2vid_job_...` returns IPFS URIs and archive manifest;
+- `e3d-agent pod2vid revise --job pod2vid_job_... --type subtitle_style` completes against a local test server/mock;
 - Maps commands continue to work;
 - delegated transaction safety checks remain intact;
-- examples are clean enough to appear in a public README without edits.
+- examples 08–12 are clean enough to appear in a public README without edits.
 
 ### Phase 6: Deployment
 
 Repos:
 
 ```text
-/home/ubuntu/e3d-pod2vid
+/home/ubuntu/e3d-pod2vid-service
 /home/ubuntu/spacepacket/server
 ```
 
@@ -1565,6 +1647,45 @@ Acceptance:
 - a dry-run paid job can be submitted end to end;
 - rollback instructions are documented;
 - "Get E3D" path works from the production domain.
+
+### Phase 7: v1.1 Features
+
+Repos:
+
+```text
+/home/ubuntu/spacepacket/server
+/home/ubuntu/e3d-pod2vid
+/home/ubuntu/e3d-pod2vid-service
+/home/ubuntu/e3d-agent
+```
+
+This phase is not part of the current implementation run. It is tracked here so no work is lost and so the spec remains complete. Begin Phase 7 only after Phase 6 is deployed and v1 is live.
+
+**Tasks:**
+
+- implement NFT minting: ERC-721 metadata, `E3DNFTManager` integration, explicit wallet confirmation for browser, delegated-wallet opt-in for agents;
+- resolve open questions 11 and 12 (mint fee and contract choice) before writing any mint code;
+- update `mint-nft` endpoint from 501 to full implementation;
+- set `nftMintAvailable: true` in capabilities response;
+- implement NFT provenance panel in UI with consent flow and public metadata preview;
+- add `e3d-agent pod2vid mint-nft` command and example 13;
+- implement remaining revision modes: end card regen, B-roll regen, voice regen;
+- add brand kit: logo upload and primary color rendering in worker and UI;
+- implement 4 visual style presets (editorial, tech, finance, cinematic) in worker;
+- add visual style preset selector in UI;
+- implement output variant generation (up to 3 candidate cuts) for short presets.
+
+**Acceptance:**
+
+- `POST /api/pod2vid/jobs/:jobId/mint-nft` returns a mint receipt with contract and token ID;
+- NFT metadata does not include raw transcript text;
+- browser mint requires wallet confirmation; agent mint requires `--send --yes` and delegated-wallet flags;
+- `e3d-agent pod2vid mint-nft --job pod2vid_job_... --send --yes` completes against a test/local contract;
+- revision modes for end card, B-roll, and voice complete against a completed parent job;
+- logo upload is stored safely and rendered into output without being accessible as an arbitrary file;
+- visual style presets produce visually distinct B-roll selections;
+- output variant jobs produce up to 3 candidate MP4s with a shared parent manifest;
+- existing v1 tests still pass.
 
 ---
 
@@ -1619,7 +1740,7 @@ End-to-end:
 - verify webhook delivery for a dry-run job and fallback polling when webhook delivery fails;
 - verify a quoted revision job preserves parent-child relationship and does not require re-upload;
 - verify IPFS archive returns `ipfs://` URIs, gateway URLs, checksums, and archive manifest;
-- verify NFT mint flow requires explicit confirmation and does not include raw transcript text in metadata;
+- verify `mint-nft` endpoint returns 501 with a v1.1 message (full mint tested in Phase 7);
 - verify later publishing can rehydrate from IPFS when the local MP4 is unavailable;
 - verify oversized artifacts are rejected or marked failed before unsafe storage/download behavior;
 - verify duplicate submission does not double-spend;
@@ -1639,8 +1760,11 @@ End-to-end:
 8. Should the 5% burn go to a dead address immediately or accumulate for a periodic burn event?
 9. Should the "Made with Pod2Vid" rebate require a verified publish URL, or be self-reported?
 10. Should IPFS archive be available on Starter, Pro only, or all paid tiers?
+
+The following questions are **v1.1 blockers** and must be resolved before Phase 7 begins. They do not block v1 launch.
+
 11. What is the exact NFT mint fee and should it be charged in E3D credits, wallet transaction cost, or both?
-12. Should NFT minting use the existing `E3DNFTManager` for v1 or introduce a product-specific Pod2Vid collection later?
+12. Should NFT minting use the existing `E3DNFTManager` for v1.1 or introduce a product-specific Pod2Vid collection?
 
 ---
 
@@ -1657,9 +1781,9 @@ The feature is done when:
 - agents can discover inputs, presets, artifact schemas, tiers, pricing, holder discount rate, and burn rate through `GET /api/pod2vid/capabilities`;
 - agents can discover usage through OpenAPI, `llms.txt`, and `.well-known/agent-capabilities.json`;
 - agents can use either webhook callbacks or polling for job completion;
-- users and agents can run quoted low-cost revision jobs against completed parent jobs;
+- users and agents can run quoted revision jobs (thumbnail, metadata, subtitle style) against completed parent jobs;
 - users can opt into IPFS archive and receive content-addressed artifact references without replacing local render storage;
-- users can optionally mint an NFT provenance record for an already archived job with explicit confirmation;
+- `mint-nft` endpoint exists and returns 501 with a clear v1.1 message (full NFT mint ships in Phase 7);
 - Pod2Vid credits are issued, balanced, and spent through shared E3D Product Payments with holder discount and burn tracking;
 - the service can run a dry-run job fully automatically;
 - a real render job can run with configured external API keys;

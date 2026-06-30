@@ -11,15 +11,27 @@
 
 ## Codex-Spec-Runner Instructions
 
-Each phase in this spec targets exactly one repo. Before executing any tasks for a phase, change to the directory listed under `Repo:` for that phase:
+Each phase in this spec targets exactly one repo. **Launch `codex-spec-runner` from the repo listed under `Repo:` for each phase.** The sandbox write access is determined at launch time, not by `cd` inside the session.
 
 ```bash
-cd <repo path listed in the phase>
+# Phase 1 and 2
+cd /home/ubuntu/spacepacket/server
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
+
+# Phase 3
+cd /home/ubuntu/e3d-pod2vid
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
+
+# Phase 4 and 6
+cd /home/ubuntu/e3d-pod2vid-service
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
+
+# Phase 5
+cd /home/ubuntu/e3d-agent
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
 ```
 
-Run all tasks, tests, and commits from within that directory. Do not execute tasks from the directory the runner was launched from if it differs from the phase repo. If the repo does not exist, create it before proceeding.
-
-Dependencies between phases are satisfied by prior phases. Each phase may assume the work of all preceding phases is complete and committed.
+Always pass the spec as an absolute path so it resolves correctly regardless of working directory. Dependencies between phases are satisfied by prior phases. Each phase may assume the work of all preceding phases is complete and committed. If the repo does not exist, create it before launching.
 
 ---
 

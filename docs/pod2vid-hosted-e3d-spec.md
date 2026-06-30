@@ -9,6 +9,20 @@
 
 ---
 
+## Codex-Spec-Runner Instructions
+
+Each phase in this spec targets exactly one repo. Before executing any tasks for a phase, change to the directory listed under `Repo:` for that phase:
+
+```bash
+cd <repo path listed in the phase>
+```
+
+Run all tasks, tests, and commits from within that directory. Do not execute tasks from the directory the runner was launched from if it differs from the phase repo. If the repo does not exist, create it before proceeding.
+
+Dependencies between phases are satisfied by prior phases. Each phase may assume the work of all preceding phases is complete and committed.
+
+---
+
 ## 1. Product Vision
 
 ### 1.1 The Hook
@@ -1444,11 +1458,10 @@ Acceptance:
 
 ### Phase 2: Pod2Vid API, Job Queue, and "Get E3D" Path
 
-Repos:
+Repo:
 
 ```text
 /home/ubuntu/spacepacket/server
-/home/ubuntu/e3d-pod2vid
 ```
 
 **v1 tasks:**
@@ -1466,7 +1479,6 @@ Repos:
 - expose holder discount and burn amount in capabilities and quote;
 - implement job persistence;
 - implement idempotent credit spend on paid job submission;
-- create a worker-facing job manifest format;
 - verify and document the "Get E3D" URL (`https://e3d.ai/token`) end-to-end;
 - add tests for auth, idempotency, failed validation, insufficient credits, tier limits, transcript limits, and artifact path safety.
 
@@ -1485,7 +1497,7 @@ Acceptance:
 - `mint-nft` endpoint returns 501 with a clear v1.1 message;
 - "Get E3D" URL is confirmed live and documented.
 
-### Phase 3: Pod2Vid Worker Wrapper
+### Phase 3: Pod2Vid Worker Wrapper and Job Manifest
 
 Repo:
 
@@ -1495,6 +1507,7 @@ Repo:
 
 **v1 tasks:**
 
+- define the worker-facing job manifest format (JSON schema that Phase 2 API writes and the worker reads);
 - add a job runner wrapper around existing scripts;
 - add dry-run mode that validates inputs and writes a fake artifact manifest;
 - support transcript-driven jobs by generating or accepting narration input according to preset;
@@ -1624,11 +1637,10 @@ Acceptance:
 
 ### Phase 6: Deployment
 
-Repos:
+Repo:
 
 ```text
 /home/ubuntu/e3d-pod2vid-service
-/home/ubuntu/spacepacket/server
 ```
 
 Tasks:
@@ -1648,44 +1660,103 @@ Acceptance:
 - rollback instructions are documented;
 - "Get E3D" path works from the production domain.
 
-### Phase 7: v1.1 Features
+### Phase 7: v1.1 API — NFT Mint
 
-Repos:
+Repo:
 
 ```text
 /home/ubuntu/spacepacket/server
-/home/ubuntu/e3d-pod2vid
-/home/ubuntu/e3d-pod2vid-service
-/home/ubuntu/e3d-agent
 ```
 
-This phase is not part of the current implementation run. It is tracked here so no work is lost and so the spec remains complete. Begin Phase 7 only after Phase 6 is deployed and v1 is live.
+Do not begin Phases 7–10 until Phase 6 is deployed and v1 is live. Resolve open questions 11 and 12 (NFT mint fee and contract choice) before writing any code in this phase.
 
 **Tasks:**
 
-- implement NFT minting: ERC-721 metadata, `E3DNFTManager` integration, explicit wallet confirmation for browser, delegated-wallet opt-in for agents;
-- resolve open questions 11 and 12 (mint fee and contract choice) before writing any mint code;
-- update `mint-nft` endpoint from 501 to full implementation;
+- update `mint-nft` endpoint from HTTP 501 to full implementation;
+- implement ERC-721 metadata construction (no raw transcript text in metadata);
+- integrate `E3DNFTManager` for on-chain minting;
+- require explicit `confirm: true` in request body for browser callers;
 - set `nftMintAvailable: true` in capabilities response;
-- implement NFT provenance panel in UI with consent flow and public metadata preview;
-- add `e3d-agent pod2vid mint-nft` command and example 13;
-- implement remaining revision modes: end card regen, B-roll regen, voice regen;
-- add brand kit: logo upload and primary color rendering in worker and UI;
-- implement 4 visual style presets (editorial, tech, finance, cinematic) in worker;
-- add visual style preset selector in UI;
-- implement output variant generation (up to 3 candidate cuts) for short presets.
+- add tests for mint auth, metadata content rules, and duplicate mint prevention.
 
 **Acceptance:**
 
 - `POST /api/pod2vid/jobs/:jobId/mint-nft` returns a mint receipt with contract and token ID;
 - NFT metadata does not include raw transcript text;
-- browser mint requires wallet confirmation; agent mint requires `--send --yes` and delegated-wallet flags;
-- `e3d-agent pod2vid mint-nft --job pod2vid_job_... --send --yes` completes against a test/local contract;
+- duplicate mint requests for the same job are rejected or idempotent;
+- capabilities response shows `nftMintAvailable: true`;
+- existing v1 tests still pass.
+
+### Phase 8: v1.1 Pipeline — Revisions, Styles, Variants
+
+Repo:
+
+```text
+/home/ubuntu/e3d-pod2vid
+```
+
+**Tasks:**
+
+- implement revision modes for end card regen, B-roll regen, and voice regen in the job runner;
+- implement brand kit: logo upload rendering and primary color application in worker output;
+- implement 4 visual style presets (editorial, tech, finance, cinematic) for B-roll selection;
+- implement output variant generation (up to 3 candidate cuts) for short presets;
+- document required API keys for new presets and revision modes.
+
+**Acceptance:**
+
 - revision modes for end card, B-roll, and voice complete against a completed parent job;
-- logo upload is stored safely and rendered into output without being accessible as an arbitrary file;
+- logo upload is stored safely under `POD2VID_STORAGE_DIR` and rendered into output without arbitrary file read risk;
 - visual style presets produce visually distinct B-roll selections;
 - output variant jobs produce up to 3 candidate MP4s with a shared parent manifest;
-- existing v1 tests still pass.
+- existing v1 render tests still pass.
+
+### Phase 9: v1.1 Service — NFT UI, Brand Kit, Visual Styles
+
+Repo:
+
+```text
+/home/ubuntu/e3d-pod2vid-service
+```
+
+**Tasks:**
+
+- implement NFT provenance panel in the Job Detail view with consent flow and public metadata preview before minting;
+- implement revision actions for end card, B-roll, and voice in the Job Detail view;
+- implement brand kit controls: logo upload and primary color picker;
+- implement 4 visual style preset selector;
+- implement output variant selection panel for short presets.
+
+**Acceptance:**
+
+- NFT mint flow requires explicit confirmation and shows the metadata that will become public before minting;
+- end card, B-roll, and voice revision actions are available on eligible completed jobs;
+- logo upload is accepted in the UI and passed to the job options without exposing the file path;
+- visual style presets are selectable before submission and reflected in the quote;
+- output variant panel shows up to 3 candidate cuts when the job produces them;
+- existing v1 UI acceptance criteria still pass.
+
+### Phase 10: v1.1 Agent — NFT Mint Command
+
+Repo:
+
+```text
+/home/ubuntu/e3d-agent
+```
+
+**Tasks:**
+
+- add `e3d-agent pod2vid mint-nft` command;
+- require `--send` and `--yes` flags and delegated-wallet opt-in for headless mint;
+- add example 13 (`examples/13-pod2vid-mint-nft.ts`);
+- add revision commands for end card, B-roll, and voice to the `revise` subcommand.
+
+**Acceptance:**
+
+- `e3d-agent pod2vid mint-nft --job pod2vid_job_... --send --yes` completes against a test/local contract;
+- mint command is rejected without `--send --yes` and explicit delegated-wallet configuration;
+- example 13 is clean enough to appear in a public README without edits;
+- existing v1 agent tests still pass.
 
 ---
 

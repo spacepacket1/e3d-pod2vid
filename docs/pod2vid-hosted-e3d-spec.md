@@ -11,27 +11,25 @@
 
 ## Codex-Spec-Runner Instructions
 
-Each phase in this spec targets exactly one repo. **Launch `codex-spec-runner` from the repo listed under `Repo:` for each phase.** The sandbox write access is determined at launch time, not by `cd` inside the session.
+Each phase in this spec targets exactly one repo. **Launch `codex-spec-runner` from the repo listed under `Repo:` for that phase.** Sandbox write access is determined at launch time — `cd` inside the session does not grant additional write access.
+
+Launch directory by repo:
+
+| Repo | Launch from |
+|---|---|
+| `/home/ubuntu/spacepacket/server` | `cd /home/ubuntu/spacepacket/server` |
+| `/home/ubuntu/e3d-pod2vid` | `cd /home/ubuntu/e3d-pod2vid` |
+| `/home/ubuntu/e3d-pod2vid-service` | `cd /home/ubuntu/e3d-pod2vid-service` |
+| `/home/ubuntu/e3d-agent` | `cd /home/ubuntu/e3d-agent` |
+
+Always pass the spec as an absolute path:
 
 ```bash
-# spacepacket/server  (run phases 1 and 2 from here)
-cd /home/ubuntu/spacepacket/server
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
-
-# e3d-pod2vid  (run phase 3 from here)
-cd /home/ubuntu/e3d-pod2vid
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
-
-# e3d-pod2vid-service  (run phases 4 and 6 from here)
-cd /home/ubuntu/e3d-pod2vid-service
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
-
-# e3d-agent  (run phase 5 from here)
-cd /home/ubuntu/e3d-agent
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
+cd <repo listed in the target phase>
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <number>
 ```
 
-Always pass the spec as an absolute path so it resolves correctly regardless of working directory. Dependencies between phases are satisfied by prior phases. Each phase may assume the work of all preceding phases is complete and committed. If the repo does not exist, create it before launching.
+Each phase may assume all preceding phases are complete and committed. If the target repo does not exist, create it before launching.
 
 ---
 

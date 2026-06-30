@@ -14,21 +14,21 @@
 Each phase in this spec targets exactly one repo. **Launch `codex-spec-runner` from the repo listed under `Repo:` for each phase.** The sandbox write access is determined at launch time, not by `cd` inside the session.
 
 ```bash
-# Phase 1 and 2
+# spacepacket/server  (run phases 1 and 2 from here)
 cd /home/ubuntu/spacepacket/server
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
 
-# Phase 3
+# e3d-pod2vid  (run phase 3 from here)
 cd /home/ubuntu/e3d-pod2vid
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
 
-# Phase 4 and 6
+# e3d-pod2vid-service  (run phases 4 and 6 from here)
 cd /home/ubuntu/e3d-pod2vid-service
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
 
-# Phase 5
+# e3d-agent  (run phase 5 from here)
 cd /home/ubuntu/e3d-agent
-codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <phase>
+codex-spec-runner /home/ubuntu/e3d-pod2vid-service/docs/pod2vid-hosted-e3d-spec.md <N>
 ```
 
 Always pass the spec as an absolute path so it resolves correctly regardless of working directory. Dependencies between phases are satisfied by prior phases. Each phase may assume the work of all preceding phases is complete and committed. If the repo does not exist, create it before launching.

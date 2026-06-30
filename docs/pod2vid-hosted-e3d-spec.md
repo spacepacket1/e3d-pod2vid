@@ -1,7 +1,7 @@
-# Feature Spec: Hosted Pod2Vid on E3D
+# Feature Spec: Hosted Cast on E3D
 
 **Project:** e3d-pod2vid  
-**Feature:** Hosted `pod2vid.e3d.ai` product, E3D-paid API endpoints, wallet UI, and agent automation  
+**Feature:** Hosted `cast.e3d.ai` product, E3D-paid API endpoints, wallet UI, and agent automation  
 **Target repos:** `/home/ubuntu/e3d-pod2vid`, `/home/ubuntu/e3d-pod2vid-service`, `/home/ubuntu/spacepacket/server`, `/home/ubuntu/e3d-agent`  
 **Status:** Draft for discussion  
 **Priority:** High  
@@ -39,7 +39,7 @@ Each phase may assume all preceding phases are complete and committed. If the ta
 
 > **Paste audio or a transcript. Get a publishable video package. Pay per job with E3D.**
 
-Pod2Vid is an agent-native, wallet-paid media rendering product. No subscription is required for render jobs. A wallet, some E3D, and an HTTP call should be enough to quote, pay for, render, and retrieve a video package.
+Cast is an agent-native, wallet-paid media rendering product. No subscription is required for render jobs. A wallet, some E3D, and an HTTP call should be enough to quote, pay for, render, and retrieve a video package.
 
 Human creators use the web workspace. AI agents call the API directly. Both pay the same way: E3D Token.
 
@@ -66,13 +66,13 @@ E3D Token is the product's payment and incentive mechanism:
 - **Every paid job records a 5% burn allocation** in E3D accounting.
 - **Agents that accumulate E3D can run more jobs.** Token acquisition is a natural part of building on E3D infrastructure.
 
-The utility loop: Pod2Vid attracts users and agents -> users acquire E3D to pay for jobs -> usage records spend and burn allocations -> E3D becomes a visible unit of account for media work across the E3D ecosystem.
+The utility loop: Cast attracts users and agents -> users acquire E3D to pay for jobs -> usage records spend and burn allocations -> E3D becomes a visible unit of account for media work across the E3D ecosystem.
 
-### 1.4 Why Pod2Vid, Not Descript, Riverside, or OpusClip
+### 1.4 Why Cast, Not Descript, Riverside, or OpusClip
 
-Existing services such as Descript, Riverside, Podcastle, and OpusClip are strong creator tools. Some already expose API, MCP, automation, or integration surfaces. Pod2Vid should not claim they are human-only or that agent video APIs do not exist.
+Existing services such as Descript, Riverside, Podcastle, and OpusClip are strong creator tools. Some already expose API, MCP, automation, or integration surfaces. Cast should not claim they are human-only or that agent video APIs do not exist.
 
-Pod2Vid's narrower position:
+Cast's narrower position:
 
 - **Wallet-paid and pay-per-job**: no subscription required for render jobs.
 - **Agent-native by design**: capabilities, pricing, limits, schemas, and examples are machine-readable before first spend.
@@ -80,11 +80,11 @@ Pod2Vid's narrower position:
 - **Open artifact model**: every job produces a manifest with inputs, options, timing, checksums, retention, and artifact metadata.
 - **Composable infrastructure**: developers can treat video rendering as a deterministic paid capability inside agent workflows.
 
-Pod2Vid does not need to beat full creative suites on editing depth in v1. It must beat them on agent onboarding, payment simplicity for wallet-native users, API clarity, and artifact transparency.
+Cast does not need to beat full creative suites on editing depth in v1. It must beat them on agent onboarding, payment simplicity for wallet-native users, API clarity, and artifact transparency.
 
 ### 1.5 Competitive Launch Bar
 
-Pod2Vid must clear a concrete product-quality bar before public launch. Architecture alone is not enough.
+Cast must clear a concrete product-quality bar before public launch. Architecture alone is not enough.
 
 Minimum human-facing bar:
 
@@ -113,11 +113,11 @@ Minimum human-facing bar:
 Minimum agent-facing bar:
 
 - hosted OpenAPI document;
-- `GET /api/pod2vid/capabilities` with tiers, presets, input schemas, artifact schemas, limits, pricing metadata, and example requests;
+- `GET /api/cast/capabilities` with tiers, presets, input schemas, artifact schemas, limits, pricing metadata, and example requests;
 - `GET /llms.txt` with concise usage guidance and endpoint links;
 - `GET /.well-known/agent-capabilities.json` with machine-readable product summary, auth modes, payment flow, and OpenAPI URL;
 - cURL examples for quote, submit, webhook, poll, artifact list, artifact download, and revision;
-- `e3d-agent pod2vid render` example that works end to end before launch;
+- `e3d-agent cast render` example that works end to end before launch;
 - webhook support for job completion/failure so agents do not have to rely only on polling;
 - artifact checksums, byte sizes, content types, and expiration timestamps;
 - optional archive/mint commands with explicit delegated-wallet safeguards.
@@ -139,7 +139,7 @@ Revision jobs may cost fewer credits than full renders and should preserve a par
 
 ### 1.7 IPFS Archive and NFT Provenance
 
-Pod2Vid should support E3D/IPFS artifact archiving, but IPFS is an additional export/archive layer, not a replacement for the render working store.
+Cast should support E3D/IPFS artifact archiving, but IPFS is an additional export/archive layer, not a replacement for the render working store.
 
 Storage model:
 
@@ -149,7 +149,7 @@ IPFS archive = optional durable/content-addressed artifact package
 NFT mint = optional on-chain provenance record pointing to IPFS metadata
 ```
 
-All jobs write local artifacts first under `POD2VID_STORAGE_DIR`. If the user opts into IPFS archive, the completed artifact package is pinned to E3D-managed IPFS storage and the job manifest records both local artifact IDs and IPFS CIDs/gateway URLs. Local files remain available for preview, revision, and publishing until the tier retention window expires, then may be deleted while IPFS references remain.
+All jobs write local artifacts first under `CAST_STORAGE_DIR`. If the user opts into IPFS archive, the completed artifact package is pinned to E3D-managed IPFS storage and the job manifest records both local artifact IDs and IPFS CIDs/gateway URLs. Local files remain available for preview, revision, and publishing until the tier retention window expires, then may be deleted while IPFS references remain.
 
 NFT minting must be separate from IPFS archiving:
 
@@ -163,11 +163,11 @@ This gives users and agents portable artifact URLs while still keeping the opera
 
 ### 1.8 The Viral Loop
 
-Every Pod2Vid output carries distribution back to the product:
+Every Cast output carries distribution back to the product:
 
-- **Free-tier outputs** include a visible `pod2vid.e3d.ai` end card and watermark. Creators share their free renders and they become ads.
-- **Paid outputs** carry an optional "Made with Pod2Vid" end card (on by default, opt-out in options). Users who leave it on get a small credit rebate per published video — rewarding sharing.
-- **Social publishing** (YouTube, Discord, Telegram, X, LinkedIn) is a first-class paid add-on, not an afterthought. Every published video is an impression for Pod2Vid and for E3D.
+- **Free-tier outputs** include a visible `cast.e3d.ai` end card and watermark. Creators share their free renders and they become ads.
+- **Paid outputs** carry an optional "Made with Cast" end card (on by default, opt-out in options). Users who leave it on get a small credit rebate per published video — rewarding sharing.
+- **Social publishing** (YouTube, Discord, Telegram, X, LinkedIn) is a first-class paid add-on, not an afterthought. Every published video is an impression for Cast and for E3D.
 - **Agent examples** in the UI are copyable one-liners. Developers who copy and run them become users. Good agent examples spread through readmes and blog posts.
 
 ### 1.9 The "Get E3D" Path
@@ -183,30 +183,30 @@ This path is resolved before Phase 3 begins, not after. It is part of Phase 2 ac
 
 ### 1.10 The One Metric
 
-**E3D Token volume consumed by Pod2Vid jobs per week.** Everything — tier design, pricing, free trial, agent examples, social publishing — serves this number. Render count and registered wallets are supporting indicators.
+**E3D Token volume consumed by Cast jobs per week.** Everything — tier design, pricing, free trial, agent examples, social publishing — serves this number. Render count and registered wallets are supporting indicators.
 
 ---
 
 ## 2. Goal
 
-Create a hosted Pod2Vid product at:
+Create a hosted Cast product at:
 
 ```text
-https://pod2vid.e3d.ai
+https://cast.e3d.ai
 ```
 
 The service lets users and agents turn podcast audio or transcripts into publishable video outputs using the existing `e3d-pod2vid` pipeline. Access is paid with E3D through the existing E3D Product Payments system in `/home/ubuntu/spacepacket/server`.
 
 The final system must support both:
 
-- a browser UI where a user connects a wallet, buys or uses Pod2Vid credits, submits jobs, and downloads outputs;
-- a fully automated agent/script path where an agent can buy credits, submit work, poll jobs, retrieve artifacts, and optionally publish through existing Pod2Vid social/upload scripts.
+- a browser UI where a user connects a wallet, buys or uses Cast credits, submits jobs, and downloads outputs;
+- a fully automated agent/script path where an agent can buy credits, submit work, poll jobs, retrieve artifacts, and optionally publish through existing Cast social/upload scripts.
 
 The hosted product is the primary example of E3D Token utility for media work. Its growth directly drives token volume.
 
 ### 2.1 Product Promise
 
-Pod2Vid should feel like a finished media workspace, not a thin wrapper around scripts.
+Cast should feel like a finished media workspace, not a thin wrapper around scripts.
 
 Human promise:
 
@@ -254,9 +254,9 @@ This table is the authoritative boundary between what Phase 1–6 implement and 
 | Preview step before paid submission | ✓ | |
 | 3 public sample outputs at share-worthy quality | ✓ | |
 | Brand kit: end card toggle, watermark by tier | ✓ | |
-| `e3d-agent pod2vid` commands including archive | ✓ | |
+| `e3d-agent cast` commands including archive | ✓ | |
 | NFT mint full implementation (ERC-721, E3DNFTManager, wallet confirmation) | | ✓ |
-| `e3d-agent pod2vid mint-nft` command | | ✓ |
+| `e3d-agent cast mint-nft` command | | ✓ |
 | NFT provenance panel in UI | | ✓ |
 | Revisions: end card regen, B-roll regen, voice regen | | ✓ |
 | Brand kit: logo upload, primary color | | ✓ |
@@ -340,8 +340,8 @@ POST /api/payments/credits/spend
 The implementation should extend this system with a new product:
 
 ```text
-product = "pod2vid"
-credit key prefix = "e3d_pod2vid_pay_"
+product = "cast"
+credit key prefix = "e3d_cast_pay_"
 ```
 
 ### 4.3 `e3d-agent`
@@ -364,7 +364,7 @@ examples/
 docs/
 ```
 
-The current agent supports Maps payments and Maps API usage. It should be enhanced so Pod2Vid becomes the next clear example of a paid E3D product that can be driven by humans or agents.
+The current agent supports Maps payments and Maps API usage. It should be enhanced so Cast becomes the next clear example of a paid E3D product that can be driven by humans or agents.
 
 ---
 
@@ -372,28 +372,28 @@ The current agent supports Maps payments and Maps API usage. It should be enhanc
 
 ### 5.1 Agent/Script Path (Primary Differentiator)
 
-The agent path is the primary competitive advantage of Pod2Vid. It must work completely without a browser after wallet onboarding.
+The agent path is the primary competitive advantage of Cast. It must work completely without a browser after wallet onboarding.
 
 Agents must be able to:
 
 1. connect or provide a wallet;
-2. call `GET /api/pod2vid/capabilities` and receive machine-readable tier limits, pricing, presets, and artifact schemas;
-3. call `POST /api/pod2vid/jobs/quote` and receive an exact credit cost with no spend;
-4. buy Pod2Vid credits using E3D Product Payments;
+2. call `GET /api/cast/capabilities` and receive machine-readable tier limits, pricing, presets, and artifact schemas;
+3. call `POST /api/cast/jobs/quote` and receive an exact credit cost with no spend;
+4. buy Cast credits using E3D Product Payments;
 5. submit a render job with input metadata;
 6. upload input media, provide a source URL, or submit transcript text;
-7. poll status via `GET /api/pod2vid/jobs/:jobId`;
-8. retrieve output artifacts via `GET /api/pod2vid/jobs/:jobId/artifacts`;
+7. poll status via `GET /api/cast/jobs/:jobId`;
+8. retrieve output artifacts via `GET /api/cast/jobs/:jobId/artifacts`;
 9. optionally publish through YouTube and announcement scripts when credentials are present;
 10. handle 402/insufficient-credit errors with machine-readable `upgradePath` fields and recover without human intervention.
 
 The agent path must support dry-run mode and explicit delegated-wallet transaction opt-in, matching the existing safety posture in `e3d-agent`.
 
-A working `e3d-agent pod2vid render` command — from credit purchase through artifact download — is required before the product is considered launched. It is the proof that the agent promise is real.
+A working `e3d-agent cast render` command — from credit purchase through artifact download — is required before the product is considered launched. It is the proof that the agent promise is real.
 
 ### 5.2 Human UI
 
-The first screen at `pod2vid.e3d.ai` should be the usable Pod2Vid workspace, not a marketing landing page. The product is the marketing.
+The first screen at `cast.e3d.ai` should be the usable Cast workspace, not a marketing landing page. The product is the marketing.
 
 Required UI capabilities:
 
@@ -417,7 +417,7 @@ Required UI capabilities:
   - voice preset for transcript/TTS jobs;
   - B-roll intensity or visual style preset;
   - optional thumbnail generation;
-  - "Made with Pod2Vid" end card toggle (on by default on paid tier; earns credit rebate);
+  - "Made with Cast" end card toggle (on by default on paid tier; earns credit rebate);
 - submit a paid render job;
 - show job status and logs at a user-safe level;
 - download output artifacts when complete;
@@ -433,7 +433,7 @@ The UI should be dense and operational. Avoid a marketing-only hero. Use the pro
 
 ```text
 e3d-pod2vid-service  (/home/ubuntu/e3d-pod2vid-service)
-  -> UI: Vite/React app served from pod2vid.e3d.ai
+  -> UI: Vite/React app served from cast.e3d.ai
   -> Worker daemon: PM2 process that picks jobs from queue and shells out to e3d-pod2vid
   -> Nginx config and deployment scripts
 
@@ -443,7 +443,7 @@ e3d-pod2vid  (/home/ubuntu/e3d-pod2vid)
   -> Used directly by developers who want to run the pipeline locally
 
 spacepacket/server  (/home/ubuntu/spacepacket/server)
-  -> Pod2Vid API routes: /api/pod2vid/*
+  -> Cast API routes: /api/cast/*
   -> Product payment quote/purchase/balance/spend
   -> Job creation/status/artifact endpoints
   -> Internal service auth for spend operations
@@ -465,12 +465,12 @@ The pipeline repo has no knowledge of the service. The service depends on the pi
 
 ### 6.2 Payment Model
 
-Pod2Vid must use the shared E3D Product Payments API.
+Cast must use the shared E3D Product Payments API.
 
-Add `pod2vid` to `PRODUCT_REGISTRY` with:
+Add `cast` to `PRODUCT_REGISTRY` with:
 
 ```text
-displayName: Pod2Vid
+displayName: Cast
 creditRate: "1 credit = 0.001 E3D or wE3D before discounts"
 paymentMethods: same shape as maps unless product-specific treasury is introduced
 minimumBaseCredits: use existing minimum unless product economics require a higher minimum
@@ -478,11 +478,11 @@ defaultRouteCost: explicit, not inherited accidentally from maps
 holderDiscount: 0.20 (20% off for qualifying E3D holders)
 burnRate: 0.05 (5% of each job's credit cost flagged for burn)
 pricing:
-  /pod2vid/jobs/quote      0
-  /pod2vid/jobs            configured job submission cost
-  /pod2vid/jobs/status     0 or very low
-  /pod2vid/jobs/artifacts  0 or very low
-  /pod2vid/shorts          configured short render cost
+  /cast/jobs/quote      0
+  /cast/jobs            configured job submission cost
+  /cast/jobs/status     0 or very low
+  /cast/jobs/artifacts  0 or very low
+  /cast/shorts          configured short render cost
 ```
 
 The implementation may use coarse v1 pricing by job type. Dynamic pricing based on duration can be added in a later phase, but the API should include estimated duration and estimated credit cost now.
@@ -496,7 +496,7 @@ The quote response must show:
 
 ### 6.2.1 Tiers and Limits
 
-Pod2Vid should expose tiers in both the UI and `GET /api/pod2vid/capabilities`. The exact credit prices can be tuned, but v1 should launch with concrete limits so users and agents know what work is acceptable before upload or spend.
+Cast should expose tiers in both the UI and `GET /api/cast/capabilities`. The exact credit prices can be tuned, but v1 should launch with concrete limits so users and agents know what work is acceptable before upload or spend.
 
 Proposed tiers:
 
@@ -509,7 +509,7 @@ Proposed tiers:
 
 Tier rules:
 
-- free renders must use a visible watermark and `pod2vid.e3d.ai` end card;
+- free renders must use a visible watermark and `cast.e3d.ai` end card;
 - free renders must not support public social publishing;
 - free artifact downloads should expire quickly and should not be indexed;
 - paid jobs should reject inputs that would exceed tier limits before spending credits;
@@ -528,7 +528,7 @@ Recommended v1 pricing units:
 | social publishing package | not available | +100 credits | +75 credits | explicit opt-in only |
 | IPFS archive package | not available | +50 credits | +25 credits | pins completed artifact package; local retention can be shorter |
 | NFT mint package | not available | mint fee + 100 credits | mint fee + 75 credits | explicit wallet/delegated-wallet confirmation |
-| "Made with Pod2Vid" rebate | n/a | -10 credits on publish | -10 credits on publish | applied after confirmed publish |
+| "Made with Cast" rebate | n/a | -10 credits on publish | -10 credits on publish | applied after confirmed publish |
 
 The UI should display prices as estimates until the final quote response is returned. The API remains the source of truth.
 
@@ -538,25 +538,25 @@ Render submission must spend credits before queueing expensive work.
 
 For v1:
 
-- `POST /api/pod2vid/jobs` spends a configured number of `pod2vid` credits.
-- `POST /api/pod2vid/shorts` spends the short render cost.
+- `POST /api/cast/jobs` spends a configured number of `cast` credits.
+- `POST /api/cast/shorts` spends the short render cost.
 - quote/status/artifact reads should be free or near-free.
 - if render fails due to service error before media processing begins, the system should record a refund or avoid spend; if refund support is not available, fail before spend whenever possible.
 
-The Pod2Vid API should call:
+The Cast API should call:
 
 ```http
 POST /api/payments/credits/spend
-Authorization: Internal <E3D_POD2VID_INTERNAL_SERVICE_KEY>
+Authorization: Internal <E3D_CAST_INTERNAL_SERVICE_KEY>
 ```
 
 with:
 
 ```json
 {
-  "product": "pod2vid",
+  "product": "cast",
   "creditKey": "<raw product credit key>",
-  "route": "/pod2vid/jobs",
+  "route": "/cast/jobs",
   "requestId": "<idempotency key>",
   "metadata": {
     "jobId": "...",
@@ -571,7 +571,7 @@ with:
 
 ### 6.4 Job Model
 
-Create a durable job model owned by Spacepacket or by a lightweight Pod2Vid service with a Spacepacket-facing API.
+Create a durable job model owned by Spacepacket or by a lightweight Cast service with a Spacepacket-facing API.
 
 Minimum job fields:
 
@@ -627,7 +627,7 @@ Use ClickHouse only if it is consistent with local server patterns. A JSONL/SQLi
 For v1, all render jobs use local disk as the working and short-term operational store:
 
 ```text
-POD2VID_STORAGE_DIR=/var/lib/e3d-pod2vid
+CAST_STORAGE_DIR=/var/lib/e3d-pod2vid
 ```
 
 Do not store user uploads or output files in the repo.
@@ -665,8 +665,8 @@ The archive manifest should include:
 
 ```json
 {
-  "kind": "pod2vid_archive",
-  "jobId": "pod2vid_job_...",
+  "kind": "cast_archive",
+  "jobId": "cast_job_...",
   "createdAt": "2026-06-30T00:00:00.000Z",
   "artifacts": [
     {
@@ -690,19 +690,19 @@ NFT metadata should follow standard ERC-721-style metadata conventions:
 
 ```json
 {
-  "name": "Pod2Vid: Episode Title",
-  "description": "Generated video package by Pod2Vid.",
+  "name": "Cast: Episode Title",
+  "description": "Generated video package by Cast.",
   "image": "ipfs://<thumbnail-cid>",
   "animation_url": "ipfs://<video-cid>",
   "properties": {
-    "kind": "pod2vid_render",
-    "job_id": "pod2vid_job_...",
+    "kind": "cast_render",
+    "job_id": "cast_job_...",
     "manifest": "ipfs://<manifest-cid>",
     "captions": "ipfs://<captions-cid>",
     "metadata": "ipfs://<metadata-cid>",
     "source_hash": "sha256:...",
     "preset": "youtube",
-    "created_by": "pod2vid.e3d.ai"
+    "created_by": "cast.e3d.ai"
   }
 }
 ```
@@ -759,14 +759,14 @@ Use existing routes:
 GET  /api/payments/products
 POST /api/payments/credits/quote
 POST /api/payments/credits/purchase
-GET  /api/payments/credits/balance?product=pod2vid
+GET  /api/payments/credits/balance?product=cast
 ```
 
 Expected quote body:
 
 ```json
 {
-  "product": "pod2vid",
+  "product": "cast",
   "wallet": "0x...",
   "requestedIssuedCredits": 1000,
   "promotionCode": "FIRST_100_AGENTS"
@@ -789,41 +789,41 @@ Expected purchase body:
 
 ```json
 {
-  "product": "pod2vid",
+  "product": "cast",
   "wallet": "0x...",
   "txHash": "0x...",
   "paymentMethod": "base-we3d"
 }
 ```
 
-### 7.2 Pod2Vid Routes
+### 7.2 Cast Routes
 
 Add:
 
 ```http
-GET  /api/pod2vid/health
-GET  /api/pod2vid/capabilities
+GET  /api/cast/health
+GET  /api/cast/capabilities
 GET  /llms.txt
 GET  /.well-known/agent-capabilities.json
-GET  /openapi/e3d-pod2vid.yaml
-POST /api/pod2vid/jobs/quote
-POST /api/pod2vid/jobs
-GET  /api/pod2vid/jobs/:jobId
-GET  /api/pod2vid/jobs/:jobId/artifacts
-GET  /api/pod2vid/jobs/:jobId/artifacts/:artifactId
-POST /api/pod2vid/jobs/:jobId/cancel
-POST /api/pod2vid/jobs/:jobId/revise
-POST /api/pod2vid/jobs/:jobId/publish
-POST /api/pod2vid/jobs/:jobId/archive-ipfs
-POST /api/pod2vid/jobs/:jobId/mint-nft
+GET  /openapi/e3d-cast.yaml
+POST /api/cast/jobs/quote
+POST /api/cast/jobs
+GET  /api/cast/jobs/:jobId
+GET  /api/cast/jobs/:jobId/artifacts
+GET  /api/cast/jobs/:jobId/artifacts/:artifactId
+POST /api/cast/jobs/:jobId/cancel
+POST /api/cast/jobs/:jobId/revise
+POST /api/cast/jobs/:jobId/publish
+POST /api/cast/jobs/:jobId/archive-ipfs
+POST /api/cast/jobs/:jobId/mint-nft
 ```
 
-`POST /api/pod2vid/jobs/quote` returns an estimated credit cost without spending credits.
+`POST /api/cast/jobs/quote` returns an estimated credit cost without spending credits.
 
-`POST /api/pod2vid/jobs` requires:
+`POST /api/cast/jobs` requires:
 
 ```http
-Authorization: Bearer <e3d_pod2vid_pay_...>
+Authorization: Bearer <e3d_cast_pay_...>
 Idempotency-Key: <stable client generated key>
 ```
 
@@ -846,7 +846,7 @@ Request shape:
     "mintNft": false,
     "publish": false
   },
-  "webhookUrl": "https://agent.example.com/hooks/pod2vid"
+  "webhookUrl": "https://agent.example.com/hooks/cast"
 }
 ```
 
@@ -874,7 +874,7 @@ Supported input shapes:
 {
   "input": {
     "kind": "upload",
-    "uploadId": "pod2vid_upload_..."
+    "uploadId": "cast_upload_..."
   },
   "preset": "youtube",
   "options": {
@@ -888,7 +888,7 @@ Response shape:
 
 ```json
 {
-  "jobId": "pod2vid_job_...",
+  "jobId": "cast_job_...",
   "status": "queued",
   "spentCredits": 80,
   "holderDiscountApplied": true,
@@ -902,7 +902,7 @@ Response shape:
 }
 ```
 
-`POST /api/pod2vid/jobs/:jobId/revise` creates a child job for low-cost changes.
+`POST /api/cast/jobs/:jobId/revise` creates a child job for low-cost changes.
 
 Request shape:
 
@@ -926,9 +926,9 @@ broll
 voice
 ```
 
-`POST /api/pod2vid/jobs/:jobId/publish` should be explicit and separate from render submission unless the caller supplies a confirmed publish option and credentials. Public publishing must never be the default.
+`POST /api/cast/jobs/:jobId/publish` should be explicit and separate from render submission unless the caller supplies a confirmed publish option and credentials. Public publishing must never be the default.
 
-`POST /api/pod2vid/jobs/:jobId/archive-ipfs` pins a completed artifact package to E3D-managed IPFS storage.
+`POST /api/cast/jobs/:jobId/archive-ipfs` pins a completed artifact package to E3D-managed IPFS storage.
 
 Request shape:
 
@@ -943,7 +943,7 @@ Response shape:
 
 ```json
 {
-  "jobId": "pod2vid_job_...",
+  "jobId": "cast_job_...",
   "status": "pinned",
   "ipfs": {
     "video": "ipfs://...",
@@ -957,7 +957,7 @@ Response shape:
 }
 ```
 
-`POST /api/pod2vid/jobs/:jobId/mint-nft` creates an NFT provenance record for an already archived job. It should require IPFS archive first.
+`POST /api/cast/jobs/:jobId/mint-nft` creates an NFT provenance record for an already archived job. It should require IPFS archive first.
 
 Request shape:
 
@@ -973,7 +973,7 @@ Minting behavior:
 
 - browser users should confirm through wallet;
 - headless agents must require delegated-wallet opt-in, `--send`, and `--yes`;
-- minting should use E3D core NFT infrastructure, such as `E3DNFTManager`, rather than Pod2Vid-specific contracts unless a product-specific contract is introduced later;
+- minting should use E3D core NFT infrastructure, such as `E3DNFTManager`, rather than Cast-specific contracts unless a product-specific contract is introduced later;
 - minting must not expose private transcript text in token metadata.
 
 Webhook behavior:
@@ -988,8 +988,8 @@ Webhook behavior:
 
 If direct browser uploads are implemented, use one of these v1 approaches:
 
-- `POST /api/pod2vid/uploads` multipart upload with size/type limits;
-- presigned local upload token followed by `POST /api/pod2vid/jobs`.
+- `POST /api/cast/uploads` multipart upload with size/type limits;
+- presigned local upload token followed by `POST /api/cast/jobs`.
 
 Minimum limits:
 
@@ -1004,13 +1004,13 @@ Reject unsupported or oversized files before spending credits.
 
 ### 7.4 Capabilities Response
 
-`GET /api/pod2vid/capabilities` should be self-describing enough for agents to decide whether to use the service without reading any documentation.
+`GET /api/cast/capabilities` should be self-describing enough for agents to decide whether to use the service without reading any documentation.
 
 Minimum response fields:
 
 ```json
 {
-  "product": "pod2vid",
+  "product": "cast",
   "version": "1.0",
   "inputs": ["upload", "url", "transcript"],
   "presets": ["short", "youtube", "tts_video", "transcript_short", "transcript_video"],
@@ -1040,9 +1040,9 @@ Minimum response fields:
     "optionalFields": ["ipfsUri", "gatewayUrl", "nftContract", "nftTokenId", "tokenUri"]
   },
   "auth": ["wallet", "product_credit_key"],
-  "openapiUrl": "https://pod2vid.e3d.ai/openapi/e3d-pod2vid.yaml",
-  "llmsTxtUrl": "https://pod2vid.e3d.ai/llms.txt",
-  "agentCapabilitiesUrl": "https://pod2vid.e3d.ai/.well-known/agent-capabilities.json",
+  "openapiUrl": "https://cast.e3d.ai/openapi/e3d-cast.yaml",
+  "llmsTxtUrl": "https://cast.e3d.ai/llms.txt",
+  "agentCapabilitiesUrl": "https://cast.e3d.ai/.well-known/agent-capabilities.json",
   "webhooks": {
     "supported": true,
     "events": ["job.succeeded", "job.failed", "job.canceled"]
@@ -1060,7 +1060,7 @@ Minimum response fields:
 
 ## 8. UI Requirements
 
-The UI can be implemented as a minimal Vite/React app, static HTML/JS, or an existing local pattern if one is found during implementation. It must be hosted from `pod2vid.e3d.ai`.
+The UI can be implemented as a minimal Vite/React app, static HTML/JS, or an existing local pattern if one is found during implementation. It must be hosted from `cast.e3d.ai`.
 
 The UI should be compelling, modern, and easy to use while staying operational. The first screen should be the product workspace: a user should immediately understand that they can make a video, see the expected cost, and start with upload, URL, transcript, or sample content. The product itself is the landing page.
 
@@ -1164,7 +1164,7 @@ Suggested free-tier copy:
 
 ```text
 Free: 3 trial renders, up to 45 seconds, 100 MB artifact package, stored for 24 hours.
-Outputs include a pod2vid.e3d.ai watermark.
+Outputs include a cast.e3d.ai watermark.
 ```
 
 Suggested paid-tier copy with holder discount:
@@ -1227,16 +1227,16 @@ IPFS/NFT UX rules:
 - NFT mint is opt-in and separate from IPFS archive;
 - NFT mint requires explicit confirmation and must show the metadata that will become public before minting;
 - private transcript text should never be shown as included in public NFT metadata; use hashes and summaries instead;
-- if a user selects publish after local retention expires, show that Pod2Vid may temporarily rehydrate the MP4 from IPFS into worker storage for upload.
+- if a user selects publish after local retention expires, show that Cast may temporarily rehydrate the MP4 from IPFS into worker storage for upload.
 
 ### 8.8 Agent Mode UX
 
-Agent Mode should be a first-class panel, not buried documentation. It serves double duty: it makes the agent path discoverable for developers, and it demonstrates that Pod2Vid is API-native.
+Agent Mode should be a first-class panel, not buried documentation. It serves double duty: it makes the agent path discoverable for developers, and it demonstrates that Cast is API-native.
 
 Required:
 
 - show curl commands for capabilities, quote, submit, webhook, poll, artifact list, download, and revision using the current selected options;
-- show matching `e3d-agent pod2vid ...` commands;
+- show matching `e3d-agent cast ...` commands;
 - expose the OpenAPI link;
 - expose `llms.txt`;
 - expose `.well-known/agent-capabilities.json`;
@@ -1256,14 +1256,14 @@ Wallet behavior:
 
 ## 9. `e3d-agent` Enhancements
 
-Pod2Vid must be a first-class product in `e3d-agent` — not an optional extension. A working end-to-end agent render is required before launch.
+Cast must be a first-class product in `e3d-agent` — not an optional extension. A working end-to-end agent render is required before launch.
 
 ### 9.1 Client
 
 Create:
 
 ```text
-src/pod2vid/pod2vid-client.ts
+src/cast/cast-client.ts
 ```
 
 Responsibilities:
@@ -1288,17 +1288,17 @@ Generalize existing payment helpers so `maps` is not hardcoded in the core purch
 New commands:
 
 ```bash
-e3d-agent pod2vid credits
-e3d-agent pod2vid buy-credits --amount 1000 --payment-method base-we3d
-e3d-agent pod2vid quote --input ./episode.m4a --preset youtube
-e3d-agent pod2vid render --input ./episode.m4a --preset youtube --wait --download ./output
-e3d-agent pod2vid render --transcript ./script.txt --preset transcript_short --wait --download ./output
-e3d-agent pod2vid render --transcript ./script.txt --preset transcript_short --webhook https://agent.example.com/hooks/pod2vid
-e3d-agent pod2vid archive --job pod2vid_job_...
-e3d-agent pod2vid mint-nft --job pod2vid_job_... --send --yes
-e3d-agent pod2vid status --job pod2vid_job_...
-e3d-agent pod2vid artifacts --job pod2vid_job_... --download ./output
-e3d-agent pod2vid revise --job pod2vid_job_... --type subtitle_style --subtitle-style bold_mobile --wait --download ./output
+e3d-agent cast credits
+e3d-agent cast buy-credits --amount 1000 --payment-method base-we3d
+e3d-agent cast quote --input ./episode.m4a --preset youtube
+e3d-agent cast render --input ./episode.m4a --preset youtube --wait --download ./output
+e3d-agent cast render --transcript ./script.txt --preset transcript_short --wait --download ./output
+e3d-agent cast render --transcript ./script.txt --preset transcript_short --webhook https://agent.example.com/hooks/cast
+e3d-agent cast archive --job cast_job_...
+e3d-agent cast mint-nft --job cast_job_... --send --yes
+e3d-agent cast status --job cast_job_...
+e3d-agent cast artifacts --job cast_job_... --download ./output
+e3d-agent cast revise --job cast_job_... --type subtitle_style --subtitle-style bold_mobile --wait --download ./output
 ```
 
 Headless delegated-wallet purchase must require:
@@ -1313,7 +1313,7 @@ E3D_AGENT_ALLOW_DELEGATED_TRANSACTIONS=true
 Save returned credit key as:
 
 ```text
-E3D_POD2VID_CREDIT_KEY=e3d_pod2vid_pay_...
+E3D_CAST_CREDIT_KEY=e3d_cast_pay_...
 ```
 
 ### 9.3 Examples and Docs
@@ -1321,14 +1321,14 @@ E3D_POD2VID_CREDIT_KEY=e3d_pod2vid_pay_...
 Add:
 
 ```text
-examples/08-pod2vid-render.ts
-examples/09-pod2vid-headless-publish.ts
-examples/10-pod2vid-webhook.ts
-examples/11-pod2vid-revise.ts
-examples/12-pod2vid-ipfs-archive.ts
-examples/13-pod2vid-mint-nft.ts
-docs/pod2vid.md
-openapi/e3d-pod2vid.yaml
+examples/08-cast-render.ts
+examples/09-cast-headless-publish.ts
+examples/10-cast-webhook.ts
+examples/11-cast-revise.ts
+examples/12-cast-ipfs-archive.ts
+examples/13-cast-mint-nft.ts
+docs/cast.md
+openapi/e3d-cast.yaml
 ```
 
 Example 08 should render and download. Example 09 may publish only when explicit publishing credentials and flags are present.
@@ -1346,13 +1346,13 @@ The examples should be clean enough to paste into a blog post or README. They ar
 Host:
 
 ```text
-pod2vid.e3d.ai
+cast.e3d.ai
 ```
 
 Implementation should add an Nginx site or server block that:
 
 - serves the UI;
-- proxies `/api/pod2vid/*` and `/api/payments/*` to the Spacepacket server;
+- proxies `/api/cast/*` and `/api/payments/*` to the Spacepacket server;
 - supports large uploads with configured body limits;
 - uses HTTPS.
 
@@ -1361,8 +1361,8 @@ Implementation should add an Nginx site or server block that:
 Add PM2 processes as needed:
 
 ```text
-pod2vid-ui       optional UI server if not static
-pod2vid-worker   render worker
+cast-ui       optional UI server if not static
+cast-worker   render worker
 ```
 
 Do not replace existing `signal-short` scheduling unless explicitly needed.
@@ -1372,21 +1372,21 @@ Do not replace existing `signal-short` scheduling unless explicitly needed.
 Required or expected:
 
 ```text
-POD2VID_PUBLIC_BASE_URL=https://pod2vid.e3d.ai
-POD2VID_STORAGE_DIR=/var/lib/e3d-pod2vid
-POD2VID_FREE_ATTEMPTS=3
-POD2VID_FREE_MAX_ARTIFACT_MB=100
-POD2VID_FREE_RETENTION_HOURS=24
-POD2VID_MAX_UPLOAD_MB=500
-POD2VID_MAX_DURATION_SECONDS=7200
-POD2VID_MAX_TRANSCRIPT_CHARS=20000
-POD2VID_HOLDER_DISCOUNT_RATE=0.20
-POD2VID_BURN_RATE=0.05
-POD2VID_GET_E3D_URL=https://e3d.ai/token
-POD2VID_IPFS_ARCHIVE_ENABLED=true
-POD2VID_NFT_MINT_ENABLED=true
-POD2VID_IPFS_LOCAL_RETENTION_HOURS=24
-E3D_POD2VID_INTERNAL_SERVICE_KEY=...
+CAST_PUBLIC_BASE_URL=https://cast.e3d.ai
+CAST_STORAGE_DIR=/var/lib/e3d-pod2vid
+CAST_FREE_ATTEMPTS=3
+CAST_FREE_MAX_ARTIFACT_MB=100
+CAST_FREE_RETENTION_HOURS=24
+CAST_MAX_UPLOAD_MB=500
+CAST_MAX_DURATION_SECONDS=7200
+CAST_MAX_TRANSCRIPT_CHARS=20000
+CAST_HOLDER_DISCOUNT_RATE=0.20
+CAST_BURN_RATE=0.05
+CAST_GET_E3D_URL=https://e3d.ai/token
+CAST_IPFS_ARCHIVE_ENABLED=true
+CAST_NFT_MINT_ENABLED=true
+CAST_IPFS_LOCAL_RETENTION_HOURS=24
+E3D_CAST_INTERNAL_SERVICE_KEY=...
 
 ASSEMBLYAI_API_KEY=...
 OPENAI_API_KEY=...
@@ -1416,8 +1416,8 @@ LINKEDIN_CLIENT_SECRET=...
 Required:
 
 - product credit keys are accepted only as bearer credentials or `X-Payment-Key`;
-- spend operations use `E3D_POD2VID_INTERNAL_SERVICE_KEY`;
-- all file paths are resolved under `POD2VID_STORAGE_DIR`;
+- spend operations use `E3D_CAST_INTERNAL_SERVICE_KEY`;
+- all file paths are resolved under `CAST_STORAGE_DIR`;
 - reject path traversal;
 - validate MIME type and extension;
 - enforce upload size and duration limits before spend;
@@ -1452,21 +1452,21 @@ Repos:
 
 Tasks:
 
-- add `pod2vid` to `productRegistry.js` with holder discount rate and burn rate fields;
-- ensure generated credit keys use `e3d_pod2vid_pay_`;
+- add `cast` to `productRegistry.js` with holder discount rate and burn rate fields;
+- ensure generated credit keys use `e3d_cast_pay_`;
 - add tests for quote, purchase, balance, route cost, and unsupported routes;
 - implement holder discount logic in quote response;
 - implement burn tracking fields in spend records;
-- confirm `/api/payments/products` lists Pod2Vid.
+- confirm `/api/payments/products` lists Cast.
 
 Acceptance:
 
-- `POST /api/payments/credits/quote` with `product=pod2vid` returns payment options including holder discount and burn amount;
-- `POST /api/payments/credits/purchase` can issue a `pod2vid` credit key in tests;
-- `GET /api/payments/credits/balance?product=pod2vid` works with service-token auth and credit-key auth;
+- `POST /api/payments/credits/quote` with `product=cast` returns payment options including holder discount and burn amount;
+- `POST /api/payments/credits/purchase` can issue a `cast` credit key in tests;
+- `GET /api/payments/credits/balance?product=cast` works with service-token auth and credit-key auth;
 - existing Maps payment tests still pass.
 
-### Phase 2: Pod2Vid API, Job Queue, and "Get E3D" Path
+### Phase 2: Cast API, Job Queue, and "Get E3D" Path
 
 Repo:
 
@@ -1476,7 +1476,7 @@ Repo:
 
 **v1 tasks:**
 
-- add Pod2Vid route module in Spacepacket;
+- add Cast route module in Spacepacket;
 - implement health/capabilities/job quote/job submit/status/artifact endpoints;
 - implement OpenAPI, `llms.txt`, and `.well-known/agent-capabilities.json` routes;
 - implement webhook URL validation, delivery, retry, and fallback polling behavior;
@@ -1507,7 +1507,7 @@ Acceptance:
 - `mint-nft` endpoint returns 501 with a clear v1.1 message;
 - "Get E3D" URL is confirmed live and documented.
 
-### Phase 3: Pod2Vid Worker Wrapper and Job Manifest
+### Phase 3: Cast Worker Wrapper and Job Manifest
 
 Repo:
 
@@ -1527,7 +1527,7 @@ Repo:
 - support IPFS archive manifests with local artifact IDs, CIDs, gateway URLs, checksums, and local retention timestamps;
 - support rehydrating archived MP4 artifacts from IPFS/gateway into temp storage for later publishing when local retention has expired;
 - add structured progress/status output;
-- ensure output paths are deterministic under `POD2VID_STORAGE_DIR`;
+- ensure output paths are deterministic under `CAST_STORAGE_DIR`;
 - document required API keys for each preset.
 
 **v1.1 tasks (deferred — do not implement in Phase 3):**
@@ -1565,7 +1565,7 @@ Worker daemon (new in `e3d-pod2vid-service`):
 - shell out to `/home/ubuntu/e3d-pod2vid/bin/pod2vid-job.py <manifest-path>` for each job;
 - read structured stdout/manifest output and update job status via the Spacepacket API;
 - handle worker errors, timeouts, and unexpected exits cleanly;
-- write a `pod2vid-worker` PM2 app entry in `ecosystem.config.js`.
+- write a `cast-worker` PM2 app entry in `ecosystem.config.js`.
 
 UI (new in `e3d-pod2vid-service`):
 
@@ -1578,8 +1578,8 @@ UI (new in `e3d-pod2vid-service`):
 - implement wallet connection;
 - implement holder discount display in quote panel;
 - implement quote/purchase/balance/job submission/status/artifact flows;
-- implement "Get E3D" button linking to `POD2VID_GET_E3D_URL`;
-- implement "Made with Pod2Vid" end card toggle and rebate display;
+- implement "Get E3D" button linking to `CAST_GET_E3D_URL`;
+- implement "Made with Cast" end card toggle and rebate display;
 - implement completed-job artifact viewer with revision actions for thumbnail, metadata, and subtitle style;
 - implement IPFS archive panel with consent flow, `ipfs://` URIs, gateway URLs, and archive manifest;
 - add agent-mode examples in the UI;
@@ -1595,7 +1595,7 @@ UI (new in `e3d-pod2vid-service`):
 
 Acceptance:
 
-- user can connect wallet and see Pod2Vid credit balance and holder discount status;
+- user can connect wallet and see Cast credit balance and holder discount status;
 - user can inspect at least 3 public sample outputs before submitting a job;
 - user can preview aspect ratio, caption style, watermark/end card state, and metadata before paid submission;
 - user can paste a transcript, see length/limit feedback, quote it (with discount applied), and submit an eligible job;
@@ -1609,7 +1609,7 @@ Acceptance:
 - UI blocks or explains jobs that exceed tier artifact/input limits;
 - responsive layout works on desktop and mobile.
 
-### Phase 5: `e3d-agent` Pod2Vid Support
+### Phase 5: `e3d-agent` Cast Support
 
 Repo:
 
@@ -1619,10 +1619,10 @@ Repo:
 
 **v1 tasks:**
 
-- add `Pod2VidClient`;
+- add `CastClient`;
 - generalize buy-credit logic beyond hardcoded `maps`;
-- add `pod2vid` CLI group;
-- store and read `E3D_POD2VID_CREDIT_KEY`;
+- add `cast` CLI group;
+- store and read `E3D_CAST_CREDIT_KEY`;
 - add webhook command (`--webhook` flag on render);
 - add revision command (`revise`) for thumbnail, metadata, and subtitle style;
 - add IPFS archive command (`archive`);
@@ -1637,10 +1637,10 @@ Repo:
 
 Acceptance:
 
-- `e3d-agent pod2vid buy-credits --amount 1000` quotes `product=pod2vid` and shows holder discount;
-- `e3d-agent pod2vid render --dry-run --wait` completes against a local test server/mock;
-- `e3d-agent pod2vid archive --job pod2vid_job_...` returns IPFS URIs and archive manifest;
-- `e3d-agent pod2vid revise --job pod2vid_job_... --type subtitle_style` completes against a local test server/mock;
+- `e3d-agent cast buy-credits --amount 1000` quotes `product=cast` and shows holder discount;
+- `e3d-agent cast render --dry-run --wait` completes against a local test server/mock;
+- `e3d-agent cast archive --job cast_job_...` returns IPFS URIs and archive manifest;
+- `e3d-agent cast revise --job cast_job_... --type subtitle_style` completes against a local test server/mock;
 - Maps commands continue to work;
 - delegated transaction safety checks remain intact;
 - examples 08–12 are clean enough to appear in a public README without edits.
@@ -1664,8 +1664,8 @@ Tasks:
 
 Acceptance:
 
-- `https://pod2vid.e3d.ai` loads the UI;
-- `https://pod2vid.e3d.ai/api/pod2vid/health` returns healthy;
+- `https://cast.e3d.ai` loads the UI;
+- `https://cast.e3d.ai/api/cast/health` returns healthy;
 - a dry-run paid job can be submitted end to end;
 - rollback instructions are documented;
 - "Get E3D" path works from the production domain.
@@ -1691,7 +1691,7 @@ Do not begin Phases 7–10 until Phase 6 is deployed and v1 is live. Resolve ope
 
 **Acceptance:**
 
-- `POST /api/pod2vid/jobs/:jobId/mint-nft` returns a mint receipt with contract and token ID;
+- `POST /api/cast/jobs/:jobId/mint-nft` returns a mint receipt with contract and token ID;
 - NFT metadata does not include raw transcript text;
 - duplicate mint requests for the same job are rejected or idempotent;
 - capabilities response shows `nftMintAvailable: true`;
@@ -1716,7 +1716,7 @@ Repo:
 **Acceptance:**
 
 - revision modes for end card, B-roll, and voice complete against a completed parent job;
-- logo upload is stored safely under `POD2VID_STORAGE_DIR` and rendered into output without arbitrary file read risk;
+- logo upload is stored safely under `CAST_STORAGE_DIR` and rendered into output without arbitrary file read risk;
 - visual style presets produce visually distinct B-roll selections;
 - output variant jobs produce up to 3 candidate MP4s with a shared parent manifest;
 - existing v1 render tests still pass.
@@ -1756,14 +1756,14 @@ Repo:
 
 **Tasks:**
 
-- add `e3d-agent pod2vid mint-nft` command;
+- add `e3d-agent cast mint-nft` command;
 - require `--send` and `--yes` flags and delegated-wallet opt-in for headless mint;
-- add example 13 (`examples/13-pod2vid-mint-nft.ts`);
+- add example 13 (`examples/13-cast-mint-nft.ts`);
 - add revision commands for end card, B-roll, and voice to the `revise` subcommand.
 
 **Acceptance:**
 
-- `e3d-agent pod2vid mint-nft --job pod2vid_job_... --send --yes` completes against a test/local contract;
+- `e3d-agent cast mint-nft --job cast_job_... --send --yes` completes against a test/local contract;
 - mint command is rejected without `--send --yes` and explicit delegated-wallet configuration;
 - example 13 is clean enough to appear in a public README without edits;
 - existing v1 agent tests still pass.
@@ -1779,7 +1779,7 @@ cd /home/ubuntu/spacepacket/server
 npm test
 ```
 
-Pod2Vid:
+Cast:
 
 ```bash
 cd /home/ubuntu/e3d-pod2vid
@@ -1800,17 +1800,17 @@ npm run check
 Manual smoke:
 
 ```bash
-curl -f https://pod2vid.e3d.ai/api/pod2vid/health
-curl -f https://pod2vid.e3d.ai/api/payments/products
-curl -f https://pod2vid.e3d.ai/api/pod2vid/capabilities
-curl -f https://pod2vid.e3d.ai/openapi/e3d-pod2vid.yaml
-curl -f https://pod2vid.e3d.ai/llms.txt
-curl -f https://pod2vid.e3d.ai/.well-known/agent-capabilities.json
+curl -f https://cast.e3d.ai/api/cast/health
+curl -f https://cast.e3d.ai/api/payments/products
+curl -f https://cast.e3d.ai/api/cast/capabilities
+curl -f https://cast.e3d.ai/openapi/e3d-cast.yaml
+curl -f https://cast.e3d.ai/llms.txt
+curl -f https://cast.e3d.ai/.well-known/agent-capabilities.json
 ```
 
 End-to-end:
 
-- buy or mock Pod2Vid credits and verify holder discount is applied;
+- buy or mock Cast credits and verify holder discount is applied;
 - run a free/sample render and verify free-attempt accounting and watermark;
 - verify public sample outputs exist for transcript, audio, and agent-generated inputs;
 - submit a transcript job and verify character limits;
@@ -1831,7 +1831,7 @@ End-to-end:
 
 ## 14. Open Questions
 
-1. Should Pod2Vid use the existing Maps treasury addresses for v1, or should it receive a product-specific treasury?
+1. Should Cast use the existing Maps treasury addresses for v1, or should it receive a product-specific treasury?
 2. What should the first public credit prices be for full video, short video, TTS replacement, and publishing?
 3. What is the v1 IPFS provider policy: public Pinata/IPFS, private gateway, or mixed by tier?
 4. Should public UI support direct wallet token transfer, or start with quote/register transaction flow plus wallet-provider send?
@@ -1839,13 +1839,13 @@ End-to-end:
 6. Which transcript-to-video voices and visual styles should be offered in v1?
 7. What is the E3D holder qualification threshold for the 20% discount — any balance, a minimum hold, or time-weighted?
 8. Should the 5% burn go to a dead address immediately or accumulate for a periodic burn event?
-9. Should the "Made with Pod2Vid" rebate require a verified publish URL, or be self-reported?
+9. Should the "Made with Cast" rebate require a verified publish URL, or be self-reported?
 10. Should IPFS archive be available on Starter, Pro only, or all paid tiers?
 
 The following questions are **v1.1 blockers** and must be resolved before Phase 7 begins. They do not block v1 launch.
 
 11. What is the exact NFT mint fee and should it be charged in E3D credits, wallet transaction cost, or both?
-12. Should NFT minting use the existing `E3DNFTManager` for v1.1 or introduce a product-specific Pod2Vid collection?
+12. Should NFT minting use the existing `E3DNFTManager` for v1.1 or introduce a product-specific Cast collection?
 
 ---
 
@@ -1853,19 +1853,19 @@ The following questions are **v1.1 blockers** and must be resolved before Phase 
 
 The feature is done when:
 
-- `pod2vid.e3d.ai` is reachable over HTTPS;
-- users can connect a wallet, acquire/use Pod2Vid credits (with holder discount), submit a job, and retrieve output artifacts;
+- `cast.e3d.ai` is reachable over HTTPS;
+- users can connect a wallet, acquire/use Cast credits (with holder discount), submit a job, and retrieve output artifacts;
 - users can create a job from upload, source URL, transcript text, or sample content;
 - the free tier is limited by attempts, input size, transcript length, artifact size, duration, retention, and concurrency, and outputs carry a watermark;
 - the "Get E3D" path works from the UI and from agent 402 error responses;
 - agents can do the same through `e3d-agent` commands without a browser after onboarding;
-- agents can discover inputs, presets, artifact schemas, tiers, pricing, holder discount rate, and burn rate through `GET /api/pod2vid/capabilities`;
+- agents can discover inputs, presets, artifact schemas, tiers, pricing, holder discount rate, and burn rate through `GET /api/cast/capabilities`;
 - agents can discover usage through OpenAPI, `llms.txt`, and `.well-known/agent-capabilities.json`;
 - agents can use either webhook callbacks or polling for job completion;
 - users and agents can run quoted revision jobs (thumbnail, metadata, subtitle style) against completed parent jobs;
 - users can opt into IPFS archive and receive content-addressed artifact references without replacing local render storage;
 - `mint-nft` endpoint exists and returns 501 with a clear v1.1 message (full NFT mint ships in Phase 7);
-- Pod2Vid credits are issued, balanced, and spent through shared E3D Product Payments with holder discount and burn tracking;
+- Cast credits are issued, balanced, and spent through shared E3D Product Payments with holder discount and burn tracking;
 - the service can run a dry-run job fully automatically;
 - a real render job can run with configured external API keys;
 - tests cover payment, idempotency, auth, worker failure, artifact safety, holder discount, and burn accounting;

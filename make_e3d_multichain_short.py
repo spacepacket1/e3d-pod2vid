@@ -35,6 +35,9 @@ W, H   = 1080, 1920
 E3D_CONTRACT = '0x6488861b401f427d13b6619c77c297366bcf6386'
 E3D_SITE     = 'e3d.ai'
 ACCENT       = '#00C2FF'   # E3D blue
+BRIDGE_VIDEO = '/Users/cbloom/Downloads/bridge-short.mp4'
+VOICE        = 'nova'
+TOP_H        = 720   # bridge video occupies top 720px; B-roll fills remaining 1200px
 
 SEGMENTS = [
     # Hook — silent
@@ -180,6 +183,83 @@ def render_closing_card(out_path, logo, price_str):
 
     img.save(out_path)
 
+# ── Split-screen render overrides ────────────────────────────────────────────
+# Top section: bridge-short.mp4 (TOP_H px tall)
+# Bottom section: per-segment Pexels B-roll (H - TOP_H px tall)
+# Subtitles overlay the full frame — they land near the bottom of the B-roll section.
+
+def make_split_renderers(bridge, ffmpeg, w, h, top_h):
+    bot_h = h - top_h
+
+    def _stack(top_input, bot_input, n_inputs, extra_overlay=None):
+        """Build filter_complex for top/bottom stack with optional full-frame overlay."""
+        fc = (
+            f"[0:v]scale={w}:{top_h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{top_h},setpts=PTS-STARTPTS[top];"
+            f"[1:v]scale={w}:{bot_h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{bot_h},setpts=PTS-STARTPTS[bot];"
+            f"[top][bot]vstack=inputs=2[bg]"
+        )
+        if extra_overlay is not None:
+            fc += f";[{extra_overlay}:v]scale={w}:{h}[ov];[bg][ov]overlay=0:0[out]"
+        else:
+            fc += ";[bg]copy[out]"
+        return fc
+
+    def render_segment(broll, audio, sub_png, duration_s, out_path):
+        fc = _stack(bridge, broll, 3, extra_overlay=2)
+        cmd = [
+            ffmpeg, '-y', '-loglevel', 'error',
+            '-stream_loop', '-1', '-i', bridge,
+            '-stream_loop', '-1', '-i', broll,
+            '-loop', '1', '-framerate', '30', '-i', sub_png,
+            '-filter_complex', fc,
+            '-map', '[out]', '-t', str(duration_s),
+            '-r', '30', '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+            '-pix_fmt', 'yuv420p', '-an', out_path,
+        ]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode != 0:
+            raise RuntimeError(f'render_segment failed:\n{r.stderr.decode()[-400:]}')
+
+    def render_hook(broll, out_path):
+        fc = (
+            f"[0:v]scale={w}:{top_h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{top_h},setpts=PTS-STARTPTS[top];"
+            f"[1:v]scale={w}:{bot_h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{bot_h},setpts=PTS-STARTPTS[bot];"
+            f"[top][bot]vstack=inputs=2[out]"
+        )
+        cmd = [
+            ffmpeg, '-y', '-loglevel', 'error',
+            '-stream_loop', '-1', '-i', bridge,
+            '-stream_loop', '-1', '-i', broll,
+            '-filter_complex', fc,
+            '-map', '[out]', '-t', '3.0',
+            '-r', '30', '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+            '-pix_fmt', 'yuv420p', '-an', out_path,
+        ]
+        subprocess.run(cmd, capture_output=True, check=True)
+
+    def render_cta_clip(broll, cta_png, duration_s, out_path):
+        fc = _stack(bridge, broll, 3, extra_overlay=2)
+        cmd = [
+            ffmpeg, '-y', '-loglevel', 'error',
+            '-stream_loop', '-1', '-i', bridge,
+            '-stream_loop', '-1', '-i', broll,
+            '-loop', '1', '-framerate', '30', '-i', cta_png,
+            '-filter_complex', fc,
+            '-map', '[out]', '-t', str(duration_s),
+            '-r', '30', '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+            '-pix_fmt', 'yuv420p', '-an', out_path,
+        ]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode != 0:
+            raise RuntimeError(f'render_cta_clip failed:\n{r.stderr.decode()[-400:]}')
+
+    return render_segment, render_hook, render_cta_clip
+
+
 # ── Logo watermark ────────────────────────────────────────────────────────────
 
 def add_logo_watermark(video_in, logo_path, video_out):
@@ -227,10 +307,17 @@ def run():
     ms.SEGMENTS  = SEGMENTS
     ms.CTA_TEXT  = f'E3D Token  ·  {E3D_SITE}'
     ms.HOOK_SECS = 3.0
+    ms.VOICE     = VOICE
 
     ms.OUT_DIR.mkdir(parents=True, exist_ok=True)
     ms.BROLL_DIR.mkdir(parents=True, exist_ok=True)
     ms.TTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Split-screen: bridge-short on top, Pexels B-roll on bottom
+    ffmpeg = os.environ.get('FFMPEG_PATH', 'ffmpeg')
+    ms.render_segment, ms.render_hook, ms.render_cta_clip = make_split_renderers(
+        BRIDGE_VIDEO, ffmpeg, W, H, TOP_H
+    )
 
     card_png = str(tmp_dir / 'closing_card.png')
     render_closing_card(card_png, logo, price_str)

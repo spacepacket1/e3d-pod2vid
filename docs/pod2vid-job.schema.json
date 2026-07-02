@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pod2vid.e3d.ai/schemas/pod2vid-job.schema.json",
+  "title": "Pod2Vid Worker Job Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["kind", "version", "jobId", "mode", "preset", "tier", "options"],
+  "properties": {
+    "kind": {
+      "const": "cast_job"
+    },
+    "version": {
+      "const": "1.0"
+    },
+    "jobId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parentJobId": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": ["render", "revision"]
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "preset": {
+      "enum": ["youtube", "short", "tts_video", "transcript_short", "transcript_video"]
+    },
+    "tier": {
+      "type": "string"
+    },
+    "retentionHours": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": ["upload", "url", "transcript"]
+        },
+        "path": {
+          "type": "string"
+        },
+        "resolvedPath": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "narrationPath": {
+          "type": "string"
+        },
+        "diarizationPath": {
+          "type": "string"
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "required": ["subtitleStyle"],
+      "properties": {
+        "subtitleStyle": {
+          "enum": [
+            "default",
+            "clean_podcast",
+            "bold_mobile",
+            "finance_signal",
+            "developer_demo",
+            "news_brief",
+            "minimal_subtitles"
+          ]
+        },
+        "voicePreset": {
+          "type": "string"
+        },
+        "generateThumbnail": {
+          "type": "boolean"
+        },
+        "brandEndCard": {
+          "type": "boolean"
+        },
+        "archiveToIpfs": {
+          "type": "boolean"
+        }
+      }
+    },
+    "brandKit": {
+      "type": "object",
+      "properties": {
+        "endCard": {
+          "type": "boolean"
+        },
+        "watermarkMode": {
+          "enum": ["tier_default", "force_on", "force_off"]
+        },
+        "watermarkText": {
+          "type": "string"
+        }
+      }
+    },
+    "platformMetadata": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "chapters": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "platforms": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["thumbnail", "metadata", "subtitle_style"]
+        },
+        "subtitleStyle": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "archive": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ipfs": {
+          "type": "object",
+          "properties": {
+            "gatewayBaseUrl": {
+              "type": "string"
+            },
+            "artifacts": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "rootDir": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -7,7 +7,8 @@
     "auth": "node yt_auth.js",
     "upload": "node yt_upload.js",
     "update": "node yt_update.js",
-    "announce": "node announce.js"
+    "announce": "node announce.js",
+    "test:worker": "python3 -m unittest discover -s tests -p 'test_*.py'"
   },
   "keywords": ["notebooklm", "podcast", "video", "youtube", "ai", "b-roll", "tts"],
   "author": "E3D Maps <https://maps.e3d.ai>",

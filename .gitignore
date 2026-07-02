@@ -1,6 +1,7 @@
 .env
 *.json
 !package.json
+!docs/*.json
 
 # Output
 output/

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from pod2vid_worker import SCHEMA_VERSION, run_job_manifest
+from pod2vid_worker import SCHEMA_VERSION, WorkerError, run_job_manifest, validate_manifest
 
 
 class Pod2VidWorkerTests(unittest.TestCase):
@@ -187,6 +187,31 @@ class Pod2VidWorkerTests(unittest.TestCase):
         command = run_subprocess.call_args_list[0].args[0]
         self.assertIn("pod2vid.py", command[1])
         self.assertEqual(command[2], str(output_dir / "input.mp3"))
+
+    def test_validate_manifest_accepts_cast_job_kind(self):
+        # The Node-side worker (e3d-cast) emits "kind": "cast_job" following
+        # the pod2vid -> cast product rename. Must not raise.
+        validate_manifest(self.base_manifest())
+
+    def test_validate_manifest_rejects_pre_rename_kind(self):
+        # Regression test for the actual production incident: this validator
+        # used to require "kind": "pod2vid_job", while the Node-side worker
+        # had already been renamed to emit "cast_job" -- every real job was
+        # rejected here before doing any work, silently, for every user,
+        # until this mismatch was found. Guards against the rename being
+        # silently reverted (or re-drifting) in either direction.
+        manifest = self.base_manifest()
+        manifest["kind"] = "pod2vid_job"
+        with self.assertRaises(WorkerError) as ctx:
+            validate_manifest(manifest)
+        self.assertEqual(ctx.exception.code, "ERR_MANIFEST_VALIDATION")
+
+    def test_validate_manifest_rejects_unknown_kind(self):
+        manifest = self.base_manifest()
+        manifest["kind"] = "something_else"
+        with self.assertRaises(WorkerError) as ctx:
+            validate_manifest(manifest)
+        self.assertEqual(ctx.exception.code, "ERR_MANIFEST_VALIDATION")
 
 
 if __name__ == "__main__":

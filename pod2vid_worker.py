@@ -39,18 +39,20 @@ STYLE_TEMPLATES = {
     "news_brief": "news_brief",
     "minimal_subtitles": "minimal_subtitles",
 }
+TRANSCRIPTION_ENGINES = {"assemblyai", "local"}
+LOCAL_WHISPER_MODEL = os.environ.get("LOCAL_WHISPER_MODEL", "base")
 PRESETS = {
     "youtube": {
         "kind": "audio",
         "aspect": "16:9",
         "video_size": (1920, 1080),
-        "required_keys": ["ASSEMBLYAI_API_KEY", "OPENAI_API_KEY", "PEXELS_API_KEY"],
+        "required_keys": ["OPENAI_API_KEY", "PEXELS_API_KEY"],
     },
     "short": {
         "kind": "audio",
         "aspect": "9:16",
         "video_size": (1080, 1920),
-        "required_keys": ["ASSEMBLYAI_API_KEY", "OPENAI_API_KEY", "PEXELS_API_KEY"],
+        "required_keys": ["OPENAI_API_KEY", "PEXELS_API_KEY"],
     },
     "tts_video": {
         "kind": "transcript",
@@ -245,6 +247,9 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     style = normalize_style(manifest["options"].get("subtitleStyle"))
     if not style:
         raise WorkerError("ERR_MANIFEST_VALIDATION", "Unsupported subtitle style template")
+    engine = manifest["options"].get("transcriptionEngine")
+    if engine is not None and str(engine).lower() not in TRANSCRIPTION_ENGINES:
+        raise WorkerError("ERR_MANIFEST_VALIDATION", f"Unsupported transcriptionEngine: {engine}")
     if manifest["mode"] == "render":
         input_payload = manifest.get("input") or {}
         if input_payload.get("kind") not in {"upload", "url", "transcript"}:
@@ -259,6 +264,10 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
             raise WorkerError("ERR_MANIFEST_VALIDATION", "Revision jobs require parentJobId")
 
 
+def transcription_engine(manifest: dict[str, Any]) -> str:
+    return str((manifest.get("options") or {}).get("transcriptionEngine") or "assemblyai").lower()
+
+
 def resolve_required_env(manifest: dict[str, Any]) -> list[str]:
     if manifest.get("dryRun"):
         return []
@@ -267,7 +276,7 @@ def resolve_required_env(manifest: dict[str, Any]) -> list[str]:
     preset = preset_config(manifest["preset"])
     needed = list(preset["required_keys"])
     if manifest.get("mode") == "render" and manifest.get("input", {}).get("kind") in {"upload", "url"}:
-        if "ASSEMBLYAI_API_KEY" not in needed:
+        if transcription_engine(manifest) == "assemblyai" and "ASSEMBLYAI_API_KEY" not in needed:
             needed.append("ASSEMBLYAI_API_KEY")
     return needed
 
@@ -502,6 +511,38 @@ def parse_transcript_segments(text: str) -> list[dict[str, str]]:
     return segments
 
 
+def transcribe_local(audio_path: Path) -> dict[str, Any]:
+    emit("job.progress", phase="transcribe", detail=f"Running local Whisper ({LOCAL_WHISPER_MODEL})")
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as error:
+        raise WorkerError(
+            "ERR_ENV_MISSING",
+            f"faster-whisper is not installed: {error}",
+            safe_message="Local transcription is unavailable on this worker.",
+        ) from error
+    try:
+        model = WhisperModel(LOCAL_WHISPER_MODEL, device="cpu", compute_type="int8")
+        segments, _info = model.transcribe(str(audio_path), vad_filter=True)
+        utterances = [
+            {
+                "speaker": "A",
+                "text": segment.text.strip(),
+                "start": int(segment.start * 1000),
+                "end": int(segment.end * 1000),
+            }
+            for segment in segments
+            if segment.text.strip()
+        ]
+    except WorkerError:
+        raise
+    except Exception as error:  # pragma: no cover - defensive wrapper
+        raise WorkerError("ERR_RENDER_FAILED", f"Local transcription failed: {error}") from error
+    if not utterances:
+        raise WorkerError("ERR_RENDER_FAILED", "Local transcription produced no speech segments")
+    return {"utterances": utterances}
+
+
 def resolve_audio_input(manifest: dict[str, Any], paths: dict[str, Path]) -> tuple[Path, Path | None]:
     input_payload = manifest["input"]
     if input_payload["kind"] == "transcript":
@@ -521,6 +562,9 @@ def resolve_audio_input(manifest: dict[str, Any], paths: dict[str, Path]) -> tup
         diar_source = Path(provided_diar).resolve()
         diarization_path = paths["work"] / f"{target_path.stem}-diarization.json"
         shutil.copy2(diar_source, diarization_path)
+    elif transcription_engine(manifest) == "local":
+        diarization_path = paths["temp"] / f"{target_path.stem}-diarization.json"
+        write_json(diarization_path, transcribe_local(target_path))
     return target_path, diarization_path
 
 

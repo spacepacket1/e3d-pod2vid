@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from pod2vid_worker import SCHEMA_VERSION, WorkerError, run_job_manifest, validate_manifest
+from pod2vid_worker import SCHEMA_VERSION, WorkerError, resolve_required_env, run_job_manifest, validate_manifest
 
 
 class Pod2VidWorkerTests(unittest.TestCase):
@@ -212,6 +212,63 @@ class Pod2VidWorkerTests(unittest.TestCase):
         with self.assertRaises(WorkerError) as ctx:
             validate_manifest(manifest)
         self.assertEqual(ctx.exception.code, "ERR_MANIFEST_VALIDATION")
+
+    def test_validate_manifest_rejects_unknown_transcription_engine(self):
+        manifest = self.base_manifest()
+        manifest["options"]["transcriptionEngine"] = "deepgram"
+        with self.assertRaises(WorkerError) as ctx:
+            validate_manifest(manifest)
+        self.assertEqual(ctx.exception.code, "ERR_MANIFEST_VALIDATION")
+
+    def test_resolve_required_env_skips_assemblyai_for_local_engine(self):
+        manifest = self.base_manifest()
+        manifest["dryRun"] = False
+        manifest["preset"] = "youtube"
+        manifest["input"] = {"kind": "upload", "path": "/tmp/input.mp3"}
+
+        self.assertIn("ASSEMBLYAI_API_KEY", resolve_required_env(manifest))
+
+        manifest["options"]["transcriptionEngine"] = "local"
+        needed = resolve_required_env(manifest)
+        self.assertNotIn("ASSEMBLYAI_API_KEY", needed)
+        self.assertIn("OPENAI_API_KEY", needed)
+        self.assertIn("PEXELS_API_KEY", needed)
+
+    def test_real_render_with_local_engine_skips_assemblyai_and_writes_diarization(self):
+        audio_path = Path(self.temp_dir.name) / "input.mp3"
+        audio_path.write_bytes(b"audio")
+        manifest = self.base_manifest(job_id="pod2vid_job_local_engine")
+        manifest["dryRun"] = False
+        manifest["preset"] = "youtube"
+        manifest["input"] = {"kind": "upload", "path": str(audio_path)}
+        manifest["options"]["archiveToIpfs"] = False
+        manifest["options"]["transcriptionEngine"] = "local"
+
+        fake_utterances = {"utterances": [{"speaker": "A", "text": "Hello.", "start": 0, "end": 1200}]}
+
+        with mock.patch("pod2vid_worker.validate_environment"), \
+                mock.patch("pod2vid_worker.transcribe_local", return_value=fake_utterances) as transcribe_local, \
+                mock.patch("pod2vid_worker.run_subprocess") as run_subprocess, \
+                mock.patch("pod2vid_worker.apply_branding") as apply_branding:
+            def fake_render_thumbnail(*args, **kwargs):
+                thumb = self.storage_dir / "jobs" / manifest["jobId"] / "artifacts" / "thumbnail.png"
+                thumb.parent.mkdir(parents=True, exist_ok=True)
+                thumb.write_bytes(b"png")
+                return thumb
+
+            output_dir = self.storage_dir / "jobs" / manifest["jobId"] / "work"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "pipeline-output.mp4").write_bytes(b"video")
+            (output_dir / "pipeline-output.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nTest\n")
+            apply_branding.side_effect = lambda m, source, paths: source
+
+            with mock.patch("pod2vid_worker.render_thumbnail", side_effect=fake_render_thumbnail):
+                run_job_manifest(str(self.write_manifest(manifest)))
+
+        transcribe_local.assert_called_once()
+        diarization_cache = output_dir / "input-diarization.json"
+        self.assertTrue(diarization_cache.exists())
+        self.assertEqual(json.loads(diarization_cache.read_text()), fake_utterances)
 
 
 if __name__ == "__main__":

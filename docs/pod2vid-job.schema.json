@@ -84,6 +84,10 @@
         },
         "archiveToIpfs": {
           "type": "boolean"
+        },
+        "transcriptionEngine": {
+          "enum": ["assemblyai", "local"],
+          "description": "assemblyai (default): paid diarized transcription. local: free faster-whisper transcription with no speaker diarization (single speaker), no ASSEMBLYAI_API_KEY required."
         }
       }
     },

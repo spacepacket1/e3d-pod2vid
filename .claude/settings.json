@@ -1,6 +1,3 @@
 {
-  "permissions": {
-    "allow": ["*"]
-  },
   "enablePromptSuggestions": true
 }

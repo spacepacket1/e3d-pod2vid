@@ -9,6 +9,9 @@
  *   node announce.js <youtube-url> [custom message]
  *
  * Environment variables:
+ *   X_MESSAGE             optional override of the post text used only for X,
+ *                         e.g. a shorter variant to fit under 280 chars
+ *
  *   DISCORD_BOT_TOKEN     bot token (starts with MTU...)
  *   DISCORD_CHANNEL_ID    target channel numeric ID
  *
@@ -164,7 +167,7 @@ async function postLinkedIn(url, message) {
   const res = await post('https://api.linkedin.com/rest/posts', {
     headers: {
       'Authorization':    `Bearer ${tokens.access_token}`,
-      'LinkedIn-Version': '202506',
+      'LinkedIn-Version': process.env.LINKEDIN_API_VERSION || '202607',
       'X-Restli-Protocol-Version': '2.0.0',
     },
   }, payload);
@@ -189,14 +192,18 @@ async function postMoltbook(url, message) {
 
 async function run() {
   const message = CUSTOM || `New video: ${YT_URL}`;
+  const xMessage = process.env.X_MESSAGE || message;
 
   console.log(`Announcing to social platforms...`);
   console.log(`Message: ${message.slice(0, 80)}${message.length > 80 ? '...' : ''}\n`);
+  if (xMessage !== message) {
+    console.log(`X message override: ${xMessage.slice(0, 80)}${xMessage.length > 80 ? '...' : ''}\n`);
+  }
 
   const results = await Promise.allSettled([
     postDiscord(YT_URL, message),
     postTelegram(YT_URL, message),
-    postX(YT_URL, message),
+    postX(YT_URL, xMessage),
     postMoltbook(YT_URL, message),
     postLinkedIn(YT_URL, message),
   ]);

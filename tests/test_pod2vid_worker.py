@@ -186,7 +186,7 @@ class Pod2VidWorkerTests(unittest.TestCase):
         self.assertEqual(first_command["VIDEO_HEIGHT"], "1080")
         command = run_subprocess.call_args_list[0].args[0]
         self.assertIn("pod2vid.py", command[1])
-        self.assertEqual(command[2], str(output_dir / "input.mp3"))
+        self.assertEqual(command[2], str((output_dir / "input.mp3").resolve()))
 
     def test_validate_manifest_accepts_cast_job_kind(self):
         # The Node-side worker (e3d-cast) emits "kind": "cast_job" following

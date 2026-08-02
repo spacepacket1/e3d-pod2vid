@@ -5,7 +5,16 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from pod2vid_worker import SCHEMA_VERSION, WorkerError, resolve_required_env, run_job_manifest, validate_manifest
+from pod2vid_worker import (
+    SCHEMA_VERSION,
+    WorkerError,
+    extract_transcript_title,
+    parse_transcript_segments,
+    resolve_required_env,
+    resolve_speaker_voice,
+    run_job_manifest,
+    validate_manifest,
+)
 
 
 class Pod2VidWorkerTests(unittest.TestCase):
@@ -54,6 +63,34 @@ class Pod2VidWorkerTests(unittest.TestCase):
 
     def read_artifact_manifest(self, job_id):
         return json.loads((self.storage_dir / "jobs" / job_id / "artifact-manifest.json").read_text())
+
+    def test_resolve_speaker_voice_defaults_differ_by_role(self):
+        self.assertEqual(resolve_speaker_voice({}, "A"), "onyx")
+        self.assertEqual(resolve_speaker_voice({}, "B"), "shimmer")
+
+    def test_resolve_speaker_voice_honors_requested_gender_and_stays_distinct(self):
+        options = {"voices": {"host": "female", "guest": "female"}}
+        host_voice = resolve_speaker_voice(options, "A")
+        guest_voice = resolve_speaker_voice(options, "B")
+        self.assertEqual(host_voice, "nova")
+        self.assertEqual(guest_voice, "shimmer")
+        self.assertNotEqual(host_voice, guest_voice)
+
+    def test_resolve_speaker_voice_ignores_invalid_gender(self):
+        self.assertEqual(resolve_speaker_voice({"voices": {"host": "robot"}}, "A"), "onyx")
+
+    def test_title_line_is_extracted_and_excluded_from_spoken_segments(self):
+        text = "Title: My Show\nHost: Welcome.\nGuest: Thanks for having me."
+        self.assertEqual(extract_transcript_title(text), "My Show")
+        segments = parse_transcript_segments(text)
+        self.assertEqual(segments, [
+            {"speaker": "A", "text": "Welcome."},
+            {"speaker": "B", "text": "Thanks for having me."},
+        ])
+
+    def test_missing_title_line_extracts_none(self):
+        self.assertIsNone(extract_transcript_title("Host: Welcome.\nGuest: Thanks."))
+        self.assertIsNone(extract_transcript_title("Title:   \nHost: Welcome."))
 
     def test_dry_run_render_writes_deterministic_artifacts(self):
         manifest = self.base_manifest()
@@ -187,6 +224,60 @@ class Pod2VidWorkerTests(unittest.TestCase):
         command = run_subprocess.call_args_list[0].args[0]
         self.assertIn("pod2vid.py", command[1])
         self.assertEqual(command[2], str(output_dir / "input.mp3"))
+
+    def test_transcript_with_title_line_prepends_title_card(self):
+        manifest = self.base_manifest(job_id="pod2vid_job_title_card")
+        manifest["dryRun"] = False
+        manifest["preset"] = "transcript_short"
+        manifest["input"] = {"kind": "transcript", "text": "Title: My Show\nHost: Welcome.\nGuest: Thanks."}
+        manifest["options"]["archiveToIpfs"] = False
+
+        output_dir = self.storage_dir / "jobs" / manifest["jobId"] / "work"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        pipeline_output = output_dir / "pipeline-output.mp4"
+        pipeline_output.write_bytes(b"video")
+        (output_dir / "pipeline-output.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nTest\n")
+
+        with mock.patch("pod2vid_worker.validate_environment"), \
+             mock.patch("pod2vid_worker.resolve_audio_input", return_value=(Path("/tmp/audio.mp3"), None)), \
+             mock.patch("pod2vid_worker.run_subprocess"), \
+             mock.patch("pod2vid_worker.apply_branding", side_effect=lambda m, source, paths: source) as apply_branding, \
+             mock.patch("pod2vid_worker.prepend_title_card", return_value=pipeline_output) as prepend_title_card, \
+             mock.patch("pod2vid_worker.render_thumbnail") as render_thumbnail:
+            render_thumbnail.side_effect = lambda *a, **k: pipeline_output
+            run_job_manifest(str(self.write_manifest(manifest)))
+
+        prepend_title_card.assert_called_once()
+        self.assertEqual(prepend_title_card.call_args.args[0], "My Show")
+        # apply_branding must receive whatever prepend_title_card returned, not
+        # the raw pipeline output -- otherwise the title card would be silently
+        # dropped from the final video.
+        apply_branding.assert_called_once()
+        self.assertEqual(apply_branding.call_args.args[1], pipeline_output)
+
+    def test_transcript_without_title_line_skips_title_card(self):
+        manifest = self.base_manifest(job_id="pod2vid_job_no_title_card")
+        manifest["dryRun"] = False
+        manifest["preset"] = "transcript_short"
+        manifest["input"] = {"kind": "transcript", "text": "Host: Welcome.\nGuest: Thanks."}
+        manifest["options"]["archiveToIpfs"] = False
+
+        output_dir = self.storage_dir / "jobs" / manifest["jobId"] / "work"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        pipeline_output = output_dir / "pipeline-output.mp4"
+        pipeline_output.write_bytes(b"video")
+        (output_dir / "pipeline-output.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nTest\n")
+
+        with mock.patch("pod2vid_worker.validate_environment"), \
+             mock.patch("pod2vid_worker.resolve_audio_input", return_value=(Path("/tmp/audio.mp3"), None)), \
+             mock.patch("pod2vid_worker.run_subprocess"), \
+             mock.patch("pod2vid_worker.apply_branding", side_effect=lambda m, source, paths: source), \
+             mock.patch("pod2vid_worker.prepend_title_card") as prepend_title_card, \
+             mock.patch("pod2vid_worker.render_thumbnail") as render_thumbnail:
+            render_thumbnail.side_effect = lambda *a, **k: pipeline_output
+            run_job_manifest(str(self.write_manifest(manifest)))
+
+        prepend_title_card.assert_not_called()
 
     def test_validate_manifest_accepts_cast_job_kind(self):
         # The Node-side worker (e3d-cast) emits "kind": "cast_job" following

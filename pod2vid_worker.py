@@ -431,6 +431,25 @@ def write_archive_manifest(manifest: dict[str, Any], paths: dict[str, Path], art
     return payload
 
 
+# OpenAI TTS voices, split by role so Host and Guest default to distinct
+# voices even when the same gender is picked for both.
+VOICE_BY_ROLE_GENDER = {
+    ("A", "male"): "onyx",
+    ("A", "female"): "nova",
+    ("B", "male"): "echo",
+    ("B", "female"): "shimmer",
+}
+
+
+def resolve_speaker_voice(options: dict[str, Any], speaker: str) -> str:
+    voices = options.get("voices") or {}
+    role_key = "host" if speaker == "A" else "guest"
+    gender = str(voices.get(role_key, "")).lower()
+    if gender not in ("male", "female"):
+        gender = "male" if speaker == "A" else "female"
+    return VOICE_BY_ROLE_GENDER[(speaker, gender)]
+
+
 def render_transcript_audio(manifest: dict[str, Any], paths: dict[str, Path]) -> tuple[Path, Path]:
     transcript = manifest["input"]["text"]
     narration_path = paths["artifacts"] / "narration.mp3"
@@ -448,7 +467,8 @@ def render_transcript_audio(manifest: dict[str, Any], paths: dict[str, Path]) ->
                 shutil.copy2(diar_source, diarization_path)
         if diarization_path.exists():
             return narration_path, diarization_path
-    voice = manifest["options"].get("voicePreset", "alloy")
+    options = manifest["options"]
+    voice_preset = options.get("voicePreset")
     ffprobe = os.environ.get("FFPROBE_PATH", "ffprobe")
     ffmpeg = os.environ.get("FFMPEG_PATH", "ffmpeg")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
@@ -465,6 +485,7 @@ def render_transcript_audio(manifest: dict[str, Any], paths: dict[str, Path]) ->
     rendered_segments: list[tuple[dict[str, str], Path]] = []
     for index, segment in enumerate(segments):
         out_path = tts_dir / f"segment-{index:03d}.mp3"
+        voice = voice_preset or resolve_speaker_voice(options, segment["speaker"])
         synthesize_tts(segment["text"], voice, out_path, openai_key)
         rendered_segments.append((segment, out_path))
     concat_list = tts_dir / "concat.txt"
@@ -504,11 +525,25 @@ def parse_transcript_segments(text: str) -> list[dict[str, str]]:
             continue
         if ":" in line:
             speaker_label, content = line.split(":", 1)
+            if speaker_label.strip().lower() == "title":
+                continue
             speaker = "A" if speaker_label.lower().startswith(("speaker 1", "host", "a")) else "B"
             segments.append({"speaker": speaker, "text": content.strip()})
         else:
             segments.append({"speaker": "A", "text": line})
     return segments
+
+
+def extract_transcript_title(text: str) -> str | None:
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if not line or ":" not in line:
+            continue
+        label, content = line.split(":", 1)
+        if label.strip().lower() == "title":
+            title = content.strip()
+            return title or None
+    return None
 
 
 def transcribe_local(audio_path: Path) -> dict[str, Any]:
@@ -573,6 +608,42 @@ def run_subprocess(command: list[str], *, env: dict[str, str]) -> None:
     result = subprocess.run(command, env=env, capture_output=True, text=True)
     if result.returncode != 0:
         raise WorkerError("ERR_RENDER_FAILED", result.stderr.strip() or result.stdout.strip() or "subprocess failed")
+
+
+def render_title_card_png(path: Path, title: str, size: tuple[int, int]) -> None:
+    ensure_parent(path)
+    width, height = size
+    image = Image.new("RGB", size, "#101820")
+    draw = ImageDraw.Draw(image)
+    font = load_font(max(36, min(72, width // 18)))
+    wrapped = textwrap.wrap(title, width=max(10, width // 24))[:3] or [title]
+    y = 48
+    for line in wrapped:
+        left, top, right, bottom = draw.textbbox((0, 0), line, font=font)
+        draw.text(((width - (right - left)) / 2, y), line, font=font, fill="#FFFFFF")
+        y += (bottom - top) + 16
+    image.save(path)
+
+
+def prepend_title_card(title: str, video_path: Path, paths: dict[str, Path], video_size: tuple[int, int]) -> Path:
+    ffmpeg = os.environ.get("FFMPEG_PATH", "ffmpeg")
+    title_card = paths["work"] / "title-card.png"
+    render_title_card_png(title_card, title, video_size)
+    title_clip = paths["work"] / "title-card.mp4"
+    subprocess.run(
+        [ffmpeg, "-y", "-loglevel", "error", "-loop", "1", "-i", str(title_card), "-t", "2.5", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(title_clip)],
+        check=True,
+    )
+    list_file = paths["work"] / "title-concat.txt"
+    combined = paths["work"] / "with-title.mp4"
+    with list_file.open("w") as handle:
+        handle.write(f"file '{title_clip}'\n")
+        handle.write(f"file '{video_path}'\n")
+    subprocess.run(
+        [ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(list_file), "-c", "copy", str(combined)],
+        check=True,
+    )
+    return combined
 
 
 def apply_branding(manifest: dict[str, Any], video_path: Path, paths: dict[str, Path]) -> Path:
@@ -640,7 +711,13 @@ def render_job(manifest: dict[str, Any], paths: dict[str, Path]) -> list[dict[st
         shutil.copy2(diarization_path, output_path.parent / f"{audio_path.stem}-diarization.json")
     emit("job.progress", phase="render", detail="Running pod2vid.py")
     run_subprocess([sys.executable, str((Path(__file__).resolve().parent / "pod2vid.py")), str(audio_path), str(output_path)], env=env)
-    branded_video = apply_branding(manifest, output_path, paths)
+    video_for_branding = output_path
+    if manifest["input"]["kind"] == "transcript":
+        title_text = extract_transcript_title(manifest["input"].get("text", ""))
+        if title_text:
+            emit("job.progress", phase="render", detail="Adding title card")
+            video_for_branding = prepend_title_card(title_text, output_path, paths, config["video_size"])
+    branded_video = apply_branding(manifest, video_for_branding, paths)
     if branded_video != paths["artifacts"] / "video.mp4":
         shutil.copy2(branded_video, paths["artifacts"] / "video.mp4")
     captions_src = output_path.with_suffix(".srt")

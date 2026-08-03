@@ -630,8 +630,20 @@ def prepend_title_card(title: str, video_path: Path, paths: dict[str, Path], vid
     title_card = paths["work"] / "title-card.png"
     render_title_card_png(title_card, title, video_size)
     title_clip = paths["work"] / "title-card.mp4"
+    # Needs a silent AAC track, not just video -- the concat demuxer below
+    # (-c copy) requires every segment to have the same streams, so a
+    # video-only title card silently drops audio from the *entire* combined
+    # output, including the narrated segment that follows it.
     subprocess.run(
-        [ffmpeg, "-y", "-loglevel", "error", "-loop", "1", "-i", str(title_card), "-t", "2.5", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(title_clip)],
+        [
+            ffmpeg, "-y", "-loglevel", "error",
+            "-loop", "1", "-i", str(title_card),
+            "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+            "-t", "2.5",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
+            str(title_clip),
+        ],
         check=True,
     )
     list_file = paths["work"] / "title-concat.txt"
@@ -658,7 +670,21 @@ def apply_branding(manifest: dict[str, Any], video_path: Path, paths: dict[str, 
         render_label_png(end_card, "Made with Pod2Vid", manifest.get("brandKit", {}).get("tagline", "pod2vid.e3d.ai"), size=(1280, 720))
         list_file = paths["work"] / "brand-concat.txt"
         end_card_clip = paths["work"] / "end-card.mp4"
-        subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-loop", "1", "-i", str(end_card), "-t", "2.5", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(end_card_clip)], check=True)
+        # Same fix as prepend_title_card(): the concat demuxer below needs a
+        # matching audio stream on every segment or the -c copy concat drops
+        # audio from the whole output.
+        subprocess.run(
+            [
+                ffmpeg, "-y", "-loglevel", "error",
+                "-loop", "1", "-i", str(end_card),
+                "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                "-t", "2.5",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k",
+                str(end_card_clip),
+            ],
+            check=True,
+        )
         source_for_concat = paths["work"] / "watermarked.mp4" if watermark else video_path
         if watermark:
             overlay_watermark(manifest, video_path, source_for_concat)

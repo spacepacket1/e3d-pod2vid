@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,13 +9,23 @@ from unittest import mock
 from pod2vid_worker import (
     SCHEMA_VERSION,
     WorkerError,
+    apply_branding,
     extract_transcript_title,
     parse_transcript_segments,
+    prepend_title_card,
     resolve_required_env,
     resolve_speaker_voice,
     run_job_manifest,
     validate_manifest,
 )
+
+
+def probe_stream_types(video_path):
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(video_path)],
+        capture_output=True, text=True, check=True,
+    )
+    return set(result.stdout.strip().splitlines())
 
 
 class Pod2VidWorkerTests(unittest.TestCase):
@@ -91,6 +102,57 @@ class Pod2VidWorkerTests(unittest.TestCase):
     def test_missing_title_line_extracts_none(self):
         self.assertIsNone(extract_transcript_title("Host: Welcome.\nGuest: Thanks."))
         self.assertIsNone(extract_transcript_title("Title:   \nHost: Welcome."))
+
+    # Regression coverage for a real bug: title cards and end cards are
+    # rendered as silent (video-only) clips, then concatenated with the
+    # narrated video via ffmpeg's concat demuxer using "-c copy" -- which
+    # requires every segment to carry the same streams. A video-only segment
+    # anywhere in that list silently drops audio from the *entire* combined
+    # output, including the narrated segment. Runs real ffmpeg (no mocks) so
+    # it actually exercises the stream-copy concat that broke in production.
+    def _make_narrated_clip(self, path):
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-f", "lavfi", "-i", "testsrc=size=320x240:duration=1",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k",
+                "-shortest", str(path),
+            ],
+            check=True,
+        )
+
+    def test_prepend_title_card_preserves_audio_from_narrated_clip(self):
+        work_dir = Path(self.temp_dir.name) / "work"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        narrated = work_dir / "pipeline-output.mp4"
+        self._make_narrated_clip(narrated)
+        self.assertIn("audio", probe_stream_types(narrated))
+
+        combined = prepend_title_card("My Show", narrated, {"work": work_dir}, (320, 240))
+
+        streams = probe_stream_types(combined)
+        self.assertIn("video", streams)
+        self.assertIn("audio", streams, "title card concat must not drop the narration audio track")
+
+    def test_apply_branding_end_card_preserves_audio(self):
+        work_dir = Path(self.temp_dir.name) / "work"
+        artifacts_dir = Path(self.temp_dir.name) / "artifacts"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        narrated = work_dir / "narrated.mp4"
+        self._make_narrated_clip(narrated)
+
+        manifest = {
+            "brandKit": {"endCard": True, "watermarkMode": "tier_default"},
+            "options": {"brandEndCard": True},
+        }
+        branded = apply_branding(manifest, narrated, {"work": work_dir, "artifacts": artifacts_dir})
+
+        streams = probe_stream_types(branded)
+        self.assertIn("video", streams)
+        self.assertIn("audio", streams, "end card concat must not drop the narration audio track")
 
     def test_dry_run_render_writes_deterministic_artifacts(self):
         manifest = self.base_manifest()

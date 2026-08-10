@@ -285,7 +285,7 @@ class Pod2VidWorkerTests(unittest.TestCase):
         self.assertEqual(first_command["VIDEO_HEIGHT"], "1080")
         command = run_subprocess.call_args_list[0].args[0]
         self.assertIn("pod2vid.py", command[1])
-        self.assertEqual(command[2], str(output_dir / "input.mp3"))
+        self.assertEqual(command[2], str((output_dir / "input.mp3").resolve()))
 
     def test_transcript_with_title_line_prepends_title_card(self):
         manifest = self.base_manifest(job_id="pod2vid_job_title_card")

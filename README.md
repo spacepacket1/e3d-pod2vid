@@ -199,7 +199,7 @@ Posts simultaneously to all configured platforms. Platforms with no credentials 
 |---|---|---|
 | Discord | `DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID` | Native, up to 20MB free tier (more with server boosts) |
 | Telegram | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Native, up to 50MB |
-| X (Twitter) | `X_ACCESS_TOKEN` with `media.write` scope (re-run `node x_auth.js` if the token predates this) | Native, via chunked upload (INITIALIZE/APPEND/FINALIZE + STATUS polling) |
+| X (Twitter) | `X_ACCESS_TOKEN` (posting) + `X_OAUTH1_*` (video upload, see step 9 below) | Native, via the v1.1 chunked upload (INIT/APPEND/FINALIZE + STATUS polling) |
 | Moltbook | `MOLTBOOK_API_KEY` | Link only — API is text/link posts |
 | LinkedIn | `linkedin-tokens.json` with `person_urn` (run `node linkedin_auth.js`) | Link only — needs a video-specific product grant beyond basic posting |
 
@@ -286,6 +286,33 @@ Once `linkedin-tokens.json` contains `person_urn`, `announce.js` will post to Li
 
 ---
 
+### 9. (Optional) X video upload setup
+
+Posting text tweets only needs the OAuth 2.0 credentials from `node x_auth.js`. Attaching video needs a *separate* OAuth 1.0a credential pair — X's video upload still runs on the classic v1.1 media endpoint, which predates OAuth 2.0 and never moved off request-signing auth.
+
+**Step 1 — Get OAuth 1.0a keys**
+
+In the [X Developer Portal](https://developer.x.com), open your app → **Keys and tokens**. Under **OAuth 1.0a**, you'll find (or can regenerate) four values:
+- API Key (Consumer Key)
+- API Key Secret (Consumer Secret)
+- Access Token
+- Access Token Secret
+
+The Access Token needs at least "Read and Write" access — Elevated/paid API tiers aren't required for this, unlike some other X products.
+
+**Step 2 — Add to `.env`**
+
+```
+X_OAUTH1_CONSUMER_KEY=...
+X_OAUTH1_CONSUMER_SECRET=...
+X_OAUTH1_ACCESS_TOKEN=...
+X_OAUTH1_ACCESS_TOKEN_SECRET=...
+```
+
+That's it — no auth script to run for these, they're used directly. `announce.js` will attach video to X automatically whenever a video path is passed and these four variables are set; without them, X falls back to a link-only post.
+
+---
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in the keys you need.
@@ -299,7 +326,11 @@ Copy `.env.example` to `.env` and fill in the keys you need.
 | `DISCORD_CHANNEL_ID` | `announce.js` | Optional |
 | `TELEGRAM_BOT_TOKEN` | `announce.js` | Optional |
 | `TELEGRAM_CHAT_ID` | `announce.js` | Optional |
-| `X_ACCESS_TOKEN` | `announce.js` | OAuth2 bearer token |
+| `X_ACCESS_TOKEN` | `announce.js` | OAuth2 bearer token, for posting the tweet itself |
+| `X_OAUTH1_CONSUMER_KEY` | `announce.js` | OAuth 1.0a, for video upload only — see step 9 above |
+| `X_OAUTH1_CONSUMER_SECRET` | `announce.js` | OAuth 1.0a, for video upload only |
+| `X_OAUTH1_ACCESS_TOKEN` | `announce.js` | OAuth 1.0a, for video upload only |
+| `X_OAUTH1_ACCESS_TOKEN_SECRET` | `announce.js` | OAuth 1.0a, for video upload only |
 | `MOLTBOOK_API_KEY` | `announce.js` | Optional |
 | `MOLTBOOK_SUBMOLT` | `announce.js` | Submolt name (default: `agentfinance`) |
 | `LINKEDIN_CLIENT_ID` | `linkedin_auth.js` | From [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps) |

@@ -17,7 +17,7 @@
  *   X_CLIENT_ID      OAuth2 client ID
  *   X_CLIENT_SECRET  OAuth2 client secret
  *
- * Scopes: tweet.read tweet.write users.read offline.access
+ * Scopes: tweet.read tweet.write users.read offline.access media.write
  */
 
 'use strict';
@@ -33,7 +33,7 @@ const CLIENT_ID     = process.env.X_CLIENT_ID;
 const CLIENT_SECRET = process.env.X_CLIENT_SECRET;
 const TOKEN_FILE    = process.env.X_TOKEN_FILE || 'x-oauth2-tokens.json';
 const REDIRECT_URI  = 'http://localhost:8080';
-const SCOPE         = 'tweet.read tweet.write users.read offline.access';
+const SCOPE         = 'tweet.read tweet.write users.read offline.access media.write';
 
 function base64url(buf) {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');

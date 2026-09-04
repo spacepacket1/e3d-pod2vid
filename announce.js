@@ -8,20 +8,24 @@
  * Usage:
  *   node announce.js <youtube-url> [custom message] [video-file-path]
  *
- * When video-file-path is given, Discord and Telegram get the actual video
- * file attached natively (people watch inline, no click-through to YouTube)
- * instead of just a link. X, Moltbook, and LinkedIn still get the YouTube
- * link — X's video upload needs a separate chunked media-upload flow and
- * elevated API access, LinkedIn's needs a video-specific product grant
- * beyond the basic "Share on LinkedIn" scope this app has, and Moltbook's
- * API is text/link-only. All of them still get the YouTube link either way,
- * since it stays the durable, searchable home for the video regardless of
- * what else it's cross-posted to.
+ * When video-file-path is given, Discord, Telegram, and X get the actual
+ * video file attached natively (people watch inline, no click-through to
+ * YouTube) instead of just a link. Moltbook and LinkedIn still get the
+ * YouTube link only — LinkedIn's native video needs a Marketing Developer
+ * Platform product grant beyond the basic "Share on LinkedIn" scope this
+ * app has (a use-case review that takes weeks to months), and Moltbook's
+ * API is text/link-only. All platforms still get the YouTube link in the
+ * post text either way, since it stays the durable, searchable home for
+ * the video regardless of what else it's cross-posted to.
  *
  * Discord's free-tier upload cap is 20MB (as of the Aug 2026 change) unless
- * the server has boosts; Telegram's Bot API cap is 50MB. A file over either
- * limit falls back to a link-only post on that platform rather than failing
- * the whole announcement.
+ * the server has boosts; Telegram's Bot API cap is 50MB. X uses a chunked
+ * upload (INITIALIZE/APPEND/FINALIZE, then polls STATUS until server-side
+ * processing finishes) rather than a single request, since the tweet-create
+ * call can't take a raw file. A file over Discord/Telegram's size limit, or
+ * any failure in X's multi-step upload/processing flow, falls back to a
+ * link-only post on that platform rather than failing the whole
+ * announcement.
  *
  * Environment variables:
  *   X_MESSAGE             optional override of the post text used only for X,
@@ -233,10 +237,110 @@ async function postTelegram(url, message, videoPath) {
   return { platform: 'Telegram', status: res.status, ok: body.ok };
 }
 
-async function postX(url, message) {
+// ── X chunked video upload ───────────────────────────────────────────────────
+// POST /2/tweets can't take a raw file - video has to be uploaded separately
+// first (INITIALIZE -> APPEND each <=5MB chunk -> FINALIZE -> poll STATUS
+// until the server-side processing finishes), then the resulting media_id
+// is referenced when creating the tweet. Unlike Discord/Telegram this is a
+// real multi-request flow, not a single multipart POST.
+
+const X_CHUNK_BYTES = 4 * 1024 * 1024; // stay comfortably under the 5MB/segment cap
+
+function xEmptyPost(pathAndQuery, token) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.twitter.com', path: pathAndQuery, port: 443,
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Length': 0 },
+    }, res => {
+      let data = '';
+      res.on('data', d => (data += d));
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+function xGet(pathAndQuery, token) {
+  return new Promise((resolve, reject) => {
+    https.get({
+      hostname: 'api.twitter.com', path: pathAndQuery, port: 443,
+      headers: { Authorization: `Bearer ${token}` },
+    }, res => {
+      let data = '';
+      res.on('data', d => (data += d));
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    }).on('error', reject);
+  });
+}
+
+async function xUploadVideo(token, videoPath) {
+  const buf = fs.readFileSync(videoPath);
+
+  const init = await post(
+    'https://api.twitter.com/2/media/upload/initialize',
+    { headers: { Authorization: `Bearer ${token}` } },
+    { media_type: 'video/mp4', total_bytes: buf.length, media_category: 'tweet_video' },
+  );
+  const initBody = JSON.parse(init.body);
+  const mediaId = initBody.data && initBody.data.id;
+  if (!mediaId) throw new Error(`X media INITIALIZE failed: ${init.status} ${init.body.slice(0, 300)}`);
+
+  let segmentIndex = 0;
+  for (let offset = 0; offset < buf.length; offset += X_CHUNK_BYTES) {
+    const chunk = buf.subarray(offset, Math.min(offset + X_CHUNK_BYTES, buf.length));
+    const res = await postMultipart(
+      `https://api.twitter.com/2/media/upload/${mediaId}/append`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      [
+        { name: 'segment_index', value: String(segmentIndex) },
+        { name: 'media', filename: 'chunk.mp4', contentType: 'video/mp4', data: chunk },
+      ],
+    );
+    if (res.status >= 300) throw new Error(`X media APPEND segment ${segmentIndex} failed: ${res.status} ${res.body.slice(0, 300)}`);
+    segmentIndex += 1;
+  }
+
+  const fin = await xEmptyPost(`/2/media/upload/${mediaId}/finalize`, token);
+  if (fin.status >= 300) throw new Error(`X media FINALIZE failed: ${fin.status} ${fin.body.slice(0, 300)}`);
+  let finBody = JSON.parse(fin.body);
+
+  let state = finBody.data && finBody.data.processing_info && finBody.data.processing_info.state;
+  const deadline = Date.now() + 120_000;
+  while (state && state !== 'succeeded' && state !== 'failed' && Date.now() < deadline) {
+    const checkAfter = (finBody.data.processing_info.check_after_secs || 2) * 1000;
+    await new Promise(r => setTimeout(r, checkAfter));
+    const statusRes = await xGet(`/2/media/upload?command=STATUS&media_id=${mediaId}`, token);
+    finBody = JSON.parse(statusRes.body);
+    state = finBody.data && finBody.data.processing_info && finBody.data.processing_info.state;
+  }
+  if (state === 'failed') throw new Error(`X media processing failed: ${JSON.stringify(finBody.data.processing_info.error || finBody.data)}`);
+
+  return mediaId;
+}
+
+async function postX(url, message, videoPath) {
   const token = await getXToken();
   if (!token) return { platform: 'X (Twitter)', skipped: true };
   const tweet = message.length <= 280 ? message : message.slice(0, 277) + '...';
+
+  if (videoPath) {
+    try {
+      const mediaId = await xUploadVideo(token, videoPath);
+      const res = await post(
+        'https://api.twitter.com/2/tweets',
+        { headers: { Authorization: `Bearer ${token}` } },
+        { text: tweet, media: { media_ids: [mediaId] } },
+      );
+      const body = JSON.parse(res.body);
+      if (body.data?.id) return { platform: 'X (Twitter)', status: res.status, ok: true, attachedVideo: true };
+      console.warn('  X tweet-with-video failed, falling back to text-only:', res.status, res.body.slice(0, 200));
+    } catch (err) {
+      console.warn('  X video upload failed, falling back to text-only:', err.message);
+    }
+  }
+
   const res = await post(
     'https://api.twitter.com/2/tweets',
     { headers: { Authorization: `Bearer ${token}` } },
@@ -321,7 +425,7 @@ async function run() {
   const results = await Promise.allSettled([
     postDiscord(YT_URL, message, VIDEO_PATH),
     postTelegram(YT_URL, message, VIDEO_PATH),
-    postX(YT_URL, xMessage),
+    postX(YT_URL, xMessage, VIDEO_PATH),
     postMoltbook(YT_URL, message),
     postLinkedIn(YT_URL, message),
   ]);

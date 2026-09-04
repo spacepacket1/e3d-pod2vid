@@ -199,7 +199,7 @@ Posts simultaneously to all configured platforms. Platforms with no credentials 
 |---|---|---|
 | Discord | `DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID` | Native, up to 20MB free tier (more with server boosts) |
 | Telegram | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Native, up to 50MB |
-| X (Twitter) | `X_ACCESS_TOKEN` | Link only — needs chunked media upload + elevated API access |
+| X (Twitter) | `X_ACCESS_TOKEN` with `media.write` scope (re-run `node x_auth.js` if the token predates this) | Native, via chunked upload (INITIALIZE/APPEND/FINALIZE + STATUS polling) |
 | Moltbook | `MOLTBOOK_API_KEY` | Link only — API is text/link posts |
 | LinkedIn | `linkedin-tokens.json` with `person_urn` (run `node linkedin_auth.js`) | Link only — needs a video-specific product grant beyond basic posting |
 

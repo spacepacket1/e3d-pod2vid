@@ -19,28 +19,38 @@
  * the video regardless of what else it's cross-posted to.
  *
  * Discord's free-tier upload cap is 20MB (as of the Aug 2026 change) unless
- * the server has boosts; Telegram's Bot API cap is 50MB. X uses a chunked
- * upload (INITIALIZE/APPEND/FINALIZE, then polls STATUS until server-side
- * processing finishes) rather than a single request, since the tweet-create
- * call can't take a raw file. A file over Discord/Telegram's size limit, or
- * any failure in X's multi-step upload/processing flow, falls back to a
- * link-only post on that platform rather than failing the whole
- * announcement.
+ * the server has boosts; Telegram's Bot API cap is 50MB. A file over either
+ * limit falls back to a link-only post on that platform rather than failing
+ * the whole announcement.
+ *
+ * X's video upload is the classic v1.1 chunked media endpoint
+ * (upload.twitter.com/1.1/media/upload.json, command=INIT/APPEND/FINALIZE/
+ * STATUS) - the newer-looking /2/media/upload path returned a bare 403 with
+ * no reason code in testing, and X's OAuth 2.0 scope list doesn't even
+ * include a media scope, so v1.1 is what's actually live. It authenticates
+ * with OAuth 1.0a request signing (separate credential pair from the OAuth
+ * 2.0 ones used for posting the tweet itself), not the Bearer token. The
+ * resulting numeric media_id is still passed to the v2 POST /2/tweets call
+ * to create the actual post - v1-uploaded media works fine there.
  *
  * Environment variables:
- *   X_MESSAGE             optional override of the post text used only for X,
- *                         e.g. a shorter variant to fit under 280 chars
+ *   X_MESSAGE                     optional override of the post text used only
+ *                                 for X, e.g. a shorter variant to fit under 280 chars
  *
- *   DISCORD_BOT_TOKEN     bot token (starts with MTU...)
- *   DISCORD_CHANNEL_ID    target channel numeric ID
+ *   DISCORD_BOT_TOKEN             bot token (starts with MTU...)
+ *   DISCORD_CHANNEL_ID            target channel numeric ID
  *
- *   TELEGRAM_BOT_TOKEN    format: 1234567890:AAF...
- *   TELEGRAM_CHAT_ID      numeric chat/channel ID (negative for groups/channels)
+ *   TELEGRAM_BOT_TOKEN            format: 1234567890:AAF...
+ *   TELEGRAM_CHAT_ID              numeric chat/channel ID (negative for groups/channels)
  *
- *   X_CLIENT_ID           OAuth2 client ID (needed for token refresh)
- *   X_CLIENT_SECRET       OAuth2 client secret (needed for token refresh)
- *   X_ACCESS_TOKEN        OAuth2 access token (auto-refreshed if X_CLIENT_ID/SECRET set)
- *   X_TOKEN_FILE          path to token file for refresh (default: agents/scripts/x-oauth2-tokens.json)
+ *   X_CLIENT_ID                   OAuth2 client ID (needed for token refresh, tweet creation)
+ *   X_CLIENT_SECRET               OAuth2 client secret (needed for token refresh)
+ *   X_ACCESS_TOKEN                OAuth2 access token (auto-refreshed if X_CLIENT_ID/SECRET set)
+ *   X_TOKEN_FILE                  path to token file for refresh (default: agents/scripts/x-oauth2-tokens.json)
+ *   X_OAUTH1_CONSUMER_KEY         OAuth 1.0a API Key (needed for video upload only)
+ *   X_OAUTH1_CONSUMER_SECRET      OAuth 1.0a API Key Secret
+ *   X_OAUTH1_ACCESS_TOKEN         OAuth 1.0a Access Token
+ *   X_OAUTH1_ACCESS_TOKEN_SECRET  OAuth 1.0a Access Token Secret
  *
  *   MOLTBOOK_API_KEY      format: moltbook_sk_...
  *   MOLTBOOK_API_URL      (default: https://moltbook.com)
@@ -51,6 +61,7 @@ require('dotenv').config();
 
 const fs     = require('fs');
 const https  = require('https');
+const crypto = require('crypto');
 const { URL, URLSearchParams } = require('url');
 
 const YT_URL     = process.argv[2];
@@ -237,85 +248,145 @@ async function postTelegram(url, message, videoPath) {
   return { platform: 'Telegram', status: res.status, ok: body.ok };
 }
 
-// ── X chunked video upload ───────────────────────────────────────────────────
+// ── X chunked video upload (v1.1, OAuth 1.0a) ────────────────────────────────
 // POST /2/tweets can't take a raw file - video has to be uploaded separately
-// first (INITIALIZE -> APPEND each <=5MB chunk -> FINALIZE -> poll STATUS
-// until the server-side processing finishes), then the resulting media_id
-// is referenced when creating the tweet. Unlike Discord/Telegram this is a
-// real multi-request flow, not a single multipart POST.
+// first (INIT -> APPEND each <=5MB chunk -> FINALIZE -> poll STATUS until
+// server-side processing finishes), then the resulting media_id is
+// referenced when creating the tweet via the v2 endpoint. This is the
+// classic, long-stable v1.1 media endpoint - the newer-looking /2/media/
+// upload path returned a bare, reason-less 403 in testing, and OAuth 2.0
+// has no media scope at all, so v1.1 is what's actually live. It needs
+// OAuth 1.0a request signing (a separate credential pair from the OAuth
+// 2.0 ones the rest of this file uses for posting the tweet itself).
 
 const X_CHUNK_BYTES = 4 * 1024 * 1024; // stay comfortably under the 5MB/segment cap
 
-function xEmptyPost(pathAndQuery, token) {
+function oauth1PercentEncode(str) {
+  // RFC 3986 encoding per the OAuth 1.0a spec - encodeURIComponent alone
+  // doesn't escape ! * ' ( ), which OAuth 1.0a requires escaped too.
+  return encodeURIComponent(str).replace(/[!*'()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+function oauth1Header({ method, url, params = {}, consumerKey, consumerSecret, token, tokenSecret }) {
+  const oauthParams = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: crypto.randomBytes(16).toString('hex'),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: String(Math.floor(Date.now() / 1000)),
+    oauth_token: token,
+    oauth_version: '1.0',
+  };
+  const allParams = Object.assign({}, params, oauthParams);
+  const paramString = Object.keys(allParams).sort()
+    .map(k => `${oauth1PercentEncode(k)}=${oauth1PercentEncode(allParams[k])}`)
+    .join('&');
+  const baseUrl = url.split('?')[0];
+  const baseString = `${method.toUpperCase()}&${oauth1PercentEncode(baseUrl)}&${oauth1PercentEncode(paramString)}`;
+  const signingKey = `${oauth1PercentEncode(consumerSecret)}&${oauth1PercentEncode(tokenSecret)}`;
+  const signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
+
+  const headerParams = Object.assign({}, oauthParams, { oauth_signature: signature });
+  return 'OAuth ' + Object.keys(headerParams).sort()
+    .map(k => `${oauth1PercentEncode(k)}="${oauth1PercentEncode(headerParams[k])}"`)
+    .join(', ');
+}
+
+function getXOAuth1Creds() {
+  const consumerKey = process.env.X_OAUTH1_CONSUMER_KEY;
+  const consumerSecret = process.env.X_OAUTH1_CONSUMER_SECRET;
+  const token = process.env.X_OAUTH1_ACCESS_TOKEN;
+  const tokenSecret = process.env.X_OAUTH1_ACCESS_TOKEN_SECRET;
+  if (!consumerKey || !consumerSecret || !token || !tokenSecret) return null;
+  return { consumerKey, consumerSecret, token, tokenSecret };
+}
+
+// Query-string params ARE part of what OAuth 1.0a signs; multipart body
+// fields are NOT (only application/x-www-form-urlencoded bodies are) -
+// which is exactly why command/media_id/etc. go on the query string here
+// instead of in a JSON or form body, matching how this endpoint has always
+// worked.
+function xOAuth1Request(method, path, queryParams, creds, multipartFields) {
   return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'api.twitter.com', path: pathAndQuery, port: 443,
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Length': 0 },
-    }, res => {
+    const qs = new URLSearchParams(queryParams).toString();
+    const fullUrl = `https://upload.twitter.com${path}${qs ? '?' + qs : ''}`;
+    const authHeader = oauth1Header({
+      method, url: fullUrl, params: queryParams,
+      consumerKey: creds.consumerKey, consumerSecret: creds.consumerSecret,
+      token: creds.token, tokenSecret: creds.tokenSecret,
+    });
+
+    let body = null;
+    const headers = { Authorization: authHeader };
+    if (multipartFields) {
+      const boundary = `----e3dpod2vid${Date.now()}${Math.random().toString(16).slice(2)}`;
+      const parts = [];
+      for (const field of multipartFields) {
+        if (field.filename) {
+          parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${field.name}"; filename="${field.filename}"\r\nContent-Type: ${field.contentType || 'application/octet-stream'}\r\n\r\n`));
+          parts.push(field.data);
+          parts.push(Buffer.from('\r\n'));
+        } else {
+          parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${field.name}"\r\n\r\n${field.value}\r\n`));
+        }
+      }
+      parts.push(Buffer.from(`--${boundary}--\r\n`));
+      body = Buffer.concat(parts);
+      headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
+      headers['Content-Length'] = body.length;
+    } else {
+      headers['Content-Length'] = 0;
+    }
+
+    const u = new URL(fullUrl);
+    const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, port: 443, method, headers }, res => {
       let data = '';
       res.on('data', d => (data += d));
       res.on('end', () => resolve({ status: res.statusCode, body: data }));
     });
     req.on('error', reject);
+    if (body) req.write(body);
     req.end();
   });
 }
 
-function xGet(pathAndQuery, token) {
-  return new Promise((resolve, reject) => {
-    https.get({
-      hostname: 'api.twitter.com', path: pathAndQuery, port: 443,
-      headers: { Authorization: `Bearer ${token}` },
-    }, res => {
-      let data = '';
-      res.on('data', d => (data += d));
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
-    }).on('error', reject);
-  });
-}
-
-async function xUploadVideo(token, videoPath) {
+async function xUploadVideo(videoPath) {
+  const creds = getXOAuth1Creds();
+  if (!creds) throw new Error('X_OAUTH1_* credentials not configured');
   const buf = fs.readFileSync(videoPath);
 
-  const init = await post(
-    'https://api.twitter.com/2/media/upload/initialize',
-    { headers: { Authorization: `Bearer ${token}` } },
-    { media_type: 'video/mp4', total_bytes: buf.length, media_category: 'tweet_video' },
-  );
+  const init = await xOAuth1Request('POST', '/1.1/media/upload.json', {
+    command: 'INIT', total_bytes: String(buf.length), media_type: 'video/mp4', media_category: 'tweet_video',
+  }, creds);
   const initBody = JSON.parse(init.body);
-  const mediaId = initBody.data && initBody.data.id;
-  if (!mediaId) throw new Error(`X media INITIALIZE failed: ${init.status} ${init.body.slice(0, 300)}`);
+  const mediaId = initBody.media_id_string;
+  if (!mediaId) throw new Error(`X media INIT failed: ${init.status} ${init.body.slice(0, 300)}`);
 
   let segmentIndex = 0;
   for (let offset = 0; offset < buf.length; offset += X_CHUNK_BYTES) {
     const chunk = buf.subarray(offset, Math.min(offset + X_CHUNK_BYTES, buf.length));
-    const res = await postMultipart(
-      `https://api.twitter.com/2/media/upload/${mediaId}/append`,
-      { headers: { Authorization: `Bearer ${token}` } },
-      [
-        { name: 'segment_index', value: String(segmentIndex) },
-        { name: 'media', filename: 'chunk.mp4', contentType: 'video/mp4', data: chunk },
-      ],
-    );
+    const res = await xOAuth1Request('POST', '/1.1/media/upload.json', {
+      command: 'APPEND', media_id: mediaId, segment_index: String(segmentIndex),
+    }, creds, [
+      { name: 'media', filename: 'chunk.mp4', contentType: 'video/mp4', data: chunk },
+    ]);
     if (res.status >= 300) throw new Error(`X media APPEND segment ${segmentIndex} failed: ${res.status} ${res.body.slice(0, 300)}`);
     segmentIndex += 1;
   }
 
-  const fin = await xEmptyPost(`/2/media/upload/${mediaId}/finalize`, token);
+  const fin = await xOAuth1Request('POST', '/1.1/media/upload.json', { command: 'FINALIZE', media_id: mediaId }, creds);
   if (fin.status >= 300) throw new Error(`X media FINALIZE failed: ${fin.status} ${fin.body.slice(0, 300)}`);
   let finBody = JSON.parse(fin.body);
 
-  let state = finBody.data && finBody.data.processing_info && finBody.data.processing_info.state;
+  let state = finBody.processing_info && finBody.processing_info.state;
   const deadline = Date.now() + 120_000;
   while (state && state !== 'succeeded' && state !== 'failed' && Date.now() < deadline) {
-    const checkAfter = (finBody.data.processing_info.check_after_secs || 2) * 1000;
+    const checkAfter = (finBody.processing_info.check_after_secs || 2) * 1000;
     await new Promise(r => setTimeout(r, checkAfter));
-    const statusRes = await xGet(`/2/media/upload?command=STATUS&media_id=${mediaId}`, token);
+    const statusRes = await xOAuth1Request('GET', '/1.1/media/upload.json', { command: 'STATUS', media_id: mediaId }, creds);
     finBody = JSON.parse(statusRes.body);
-    state = finBody.data && finBody.data.processing_info && finBody.data.processing_info.state;
+    state = finBody.processing_info && finBody.processing_info.state;
   }
-  if (state === 'failed') throw new Error(`X media processing failed: ${JSON.stringify(finBody.data.processing_info.error || finBody.data)}`);
+  if (state === 'failed') throw new Error(`X media processing failed: ${JSON.stringify((finBody.processing_info && finBody.processing_info.error) || finBody)}`);
 
   return mediaId;
 }
@@ -325,9 +396,9 @@ async function postX(url, message, videoPath) {
   if (!token) return { platform: 'X (Twitter)', skipped: true };
   const tweet = message.length <= 280 ? message : message.slice(0, 277) + '...';
 
-  if (videoPath) {
+  if (videoPath && getXOAuth1Creds()) {
     try {
-      const mediaId = await xUploadVideo(token, videoPath);
+      const mediaId = await xUploadVideo(videoPath);
       const res = await post(
         'https://api.twitter.com/2/tweets',
         { headers: { Authorization: `Bearer ${token}` } },

@@ -188,17 +188,22 @@ node yt_update.js VIDEO_ID thumbnail.png
 
 ```bash
 node announce.js https://www.youtube.com/watch?v=VIDEO_ID "New episode: Predictive GPS for Autonomous AI Agents"
+
+# With the video file attached natively on platforms that support it:
+node announce.js https://www.youtube.com/watch?v=VIDEO_ID "New episode: ..." output/episode.mp4
 ```
 
 Posts simultaneously to all configured platforms. Platforms with no credentials are silently skipped.
 
-| Platform | Credential(s) needed |
-|---|---|
-| Discord | `DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID` |
-| Telegram | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` |
-| X (Twitter) | `X_ACCESS_TOKEN` |
-| Moltbook | `MOLTBOOK_API_KEY` |
-| LinkedIn | `linkedin-tokens.json` with `person_urn` (run `node linkedin_auth.js`) |
+| Platform | Credential(s) needed | Video attachment |
+|---|---|---|
+| Discord | `DISCORD_BOT_TOKEN` + `DISCORD_CHANNEL_ID` | Native, up to 20MB free tier (more with server boosts) |
+| Telegram | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Native, up to 50MB |
+| X (Twitter) | `X_ACCESS_TOKEN` | Link only — needs chunked media upload + elevated API access |
+| Moltbook | `MOLTBOOK_API_KEY` | Link only — API is text/link posts |
+| LinkedIn | `linkedin-tokens.json` with `person_urn` (run `node linkedin_auth.js`) | Link only — needs a video-specific product grant beyond basic posting |
+
+The YouTube link is always included in the post text, even on platforms that get the video file attached directly — it stays the durable, searchable home for the video. A video over a platform's size limit falls back to a link-only post on that platform instead of failing the whole announcement.
 
 ---
 

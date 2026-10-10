@@ -18,7 +18,8 @@ module.exports = {
       env_production: {
         NODE_ENV:            'production',
         // Copy from .env or set here:
-        OPENAI_API_KEY:      process.env.OPENAI_API_KEY      || '',
+        OPENAI_API_KEY:      process.env.OPENAI_API_KEY      || '',   // TTS only
+        CLAUDE_API_KEY:      process.env.CLAUDE_API_KEY      || '',
         PEXELS_API_KEY:      process.env.PEXELS_API_KEY      || '',
         MAPS_URL:            process.env.MAPS_URL             || 'https://maps.e3d.ai',
         MAPS_INTERNAL_KEY:   process.env.MAPS_INTERNAL_KEY   || '',

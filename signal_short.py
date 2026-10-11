@@ -239,6 +239,7 @@ def generate_script(signal, mode):
     import anthropic
     r = anthropic.Anthropic(api_key=CLAUDE_KEY, timeout=60).messages.create(
         model='claude-haiku-5-5',
+        thinking={'type': 'disabled'},  # thinking tokens would eat max_tokens
         max_tokens=1000,
         system=SCRIPT_SYSTEM + '\n\nRespond with a single JSON object only, no markdown fences.',
         messages=[{'role': 'user', 'content': user_msg}],

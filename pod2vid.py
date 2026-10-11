@@ -176,6 +176,7 @@ def generate_queries_batch(batch, offset):
     import anthropic
     r = anthropic.Anthropic(api_key=CLAUDE_KEY, timeout=60).messages.create(
         model='claude-haiku-5-5',
+        thinking={'type': 'disabled'},  # thinking tokens would eat max_tokens
         max_tokens=800,
         system=QUERY_SYSTEM,
         messages=[{'role': 'user', 'content':

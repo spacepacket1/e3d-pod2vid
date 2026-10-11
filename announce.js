@@ -2,26 +2,55 @@
 /**
  * announce.js  —  e3d-pod2vid
  *
- * Posts a YouTube video URL to all configured social platforms simultaneously.
- * Each platform is optional — configure only what you have.
+ * Posts to all configured social platforms simultaneously. Each platform is
+ * optional — configure only what you have.
  *
  * Usage:
- *   node announce.js <youtube-url> [custom message]
+ *   node announce.js <youtube-url> [custom message] [video-file-path]
+ *
+ * When video-file-path is given, Discord, Telegram, and X get the actual
+ * video file attached natively (people watch inline, no click-through to
+ * YouTube) instead of just a link. Moltbook and LinkedIn still get the
+ * YouTube link only — LinkedIn's native video needs a Marketing Developer
+ * Platform product grant beyond the basic "Share on LinkedIn" scope this
+ * app has (a use-case review that takes weeks to months), and Moltbook's
+ * API is text/link-only. All platforms still get the YouTube link in the
+ * post text either way, since it stays the durable, searchable home for
+ * the video regardless of what else it's cross-posted to.
+ *
+ * Discord's free-tier upload cap is 20MB (as of the Aug 2026 change) unless
+ * the server has boosts; Telegram's Bot API cap is 50MB. A file over either
+ * limit falls back to a link-only post on that platform rather than failing
+ * the whole announcement.
+ *
+ * X's video upload is the classic v1.1 chunked media endpoint
+ * (upload.twitter.com/1.1/media/upload.json, command=INIT/APPEND/FINALIZE/
+ * STATUS) - the newer-looking /2/media/upload path returned a bare 403 with
+ * no reason code in testing, and X's OAuth 2.0 scope list doesn't even
+ * include a media scope, so v1.1 is what's actually live. It authenticates
+ * with OAuth 1.0a request signing (separate credential pair from the OAuth
+ * 2.0 ones used for posting the tweet itself), not the Bearer token. The
+ * resulting numeric media_id is still passed to the v2 POST /2/tweets call
+ * to create the actual post - v1-uploaded media works fine there.
  *
  * Environment variables:
- *   X_MESSAGE             optional override of the post text used only for X,
- *                         e.g. a shorter variant to fit under 280 chars
+ *   X_MESSAGE                     optional override of the post text used only
+ *                                 for X, e.g. a shorter variant to fit under 280 chars
  *
- *   DISCORD_BOT_TOKEN     bot token (starts with MTU...)
- *   DISCORD_CHANNEL_ID    target channel numeric ID
+ *   DISCORD_BOT_TOKEN             bot token (starts with MTU...)
+ *   DISCORD_CHANNEL_ID            target channel numeric ID
  *
- *   TELEGRAM_BOT_TOKEN    format: 1234567890:AAF...
- *   TELEGRAM_CHAT_ID      numeric chat/channel ID (negative for groups/channels)
+ *   TELEGRAM_BOT_TOKEN            format: 1234567890:AAF...
+ *   TELEGRAM_CHAT_ID              numeric chat/channel ID (negative for groups/channels)
  *
- *   X_CLIENT_ID           OAuth2 client ID (needed for token refresh)
- *   X_CLIENT_SECRET       OAuth2 client secret (needed for token refresh)
- *   X_ACCESS_TOKEN        OAuth2 access token (auto-refreshed if X_CLIENT_ID/SECRET set)
- *   X_TOKEN_FILE          path to token file for refresh (default: agents/scripts/x-oauth2-tokens.json)
+ *   X_CLIENT_ID                   OAuth2 client ID (needed for token refresh, tweet creation)
+ *   X_CLIENT_SECRET               OAuth2 client secret (needed for token refresh)
+ *   X_ACCESS_TOKEN                OAuth2 access token (auto-refreshed if X_CLIENT_ID/SECRET set)
+ *   X_TOKEN_FILE                  path to token file for refresh (default: agents/scripts/x-oauth2-tokens.json)
+ *   X_OAUTH1_CONSUMER_KEY         OAuth 1.0a API Key (needed for video upload only)
+ *   X_OAUTH1_CONSUMER_SECRET      OAuth 1.0a API Key Secret
+ *   X_OAUTH1_ACCESS_TOKEN         OAuth 1.0a Access Token
+ *   X_OAUTH1_ACCESS_TOKEN_SECRET  OAuth 1.0a Access Token Secret
  *
  *   MOLTBOOK_API_KEY      format: moltbook_sk_...
  *   MOLTBOOK_API_URL      (default: https://moltbook.com)
@@ -32,17 +61,24 @@ require('dotenv').config();
 
 const fs     = require('fs');
 const https  = require('https');
+const crypto = require('crypto');
 const { URL, URLSearchParams } = require('url');
 
-const YT_URL = process.argv[2];
-const CUSTOM = process.argv[3] || '';
+const YT_URL     = process.argv[2];
+const CUSTOM     = process.argv[3] || '';
+const VIDEO_PATH = process.argv[4] || '';
 
 if (!YT_URL) {
-  console.error('Usage: node announce.js <youtube-url> [message]');
+  console.error('Usage: node announce.js <youtube-url> [message] [video-file-path]');
   process.exit(1);
 }
 
-// ── HTTP helper ───────────────────────────────────────────────────────────────
+if (VIDEO_PATH && !fs.existsSync(VIDEO_PATH)) {
+  console.error(`Video file not found: ${VIDEO_PATH}`);
+  process.exit(1);
+}
+
+// ── HTTP helpers ─────────────────────────────────────────────────────────────
 
 function post(url, opts, payload) {
   return new Promise((resolve, reject) => {
@@ -54,6 +90,49 @@ function post(url, opts, payload) {
       headers: Object.assign({
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
+      }, opts.headers || {}),
+    }, res => {
+      let data = '';
+      res.on('data', d => (data += d));
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// Minimal hand-rolled multipart/form-data encoder - no npm dependency for
+// this beyond what's already in package.json (just dotenv). `fields` is an
+// ordered list of either {name, value} (plain text field) or
+// {name, filename, contentType, data} (file field, data is a Buffer).
+function postMultipart(url, opts, fields) {
+  return new Promise((resolve, reject) => {
+    const boundary = `----e3dpod2vid${Date.now()}${Math.random().toString(16).slice(2)}`;
+    const parts = [];
+    for (const field of fields) {
+      if (field.filename) {
+        parts.push(Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${field.name}"; filename="${field.filename}"\r\nContent-Type: ${field.contentType || 'application/octet-stream'}\r\n\r\n`,
+        ));
+        parts.push(field.data);
+        parts.push(Buffer.from('\r\n'));
+      } else {
+        parts.push(Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${field.name}"\r\n\r\n${field.value}\r\n`,
+        ));
+      }
+    }
+    parts.push(Buffer.from(`--${boundary}--\r\n`));
+    const body = Buffer.concat(parts);
+
+    const u = new URL(url);
+    const req = https.request({
+      hostname: u.hostname, path: u.pathname + u.search, port: 443,
+      method: 'POST',
+      headers: Object.assign({
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': body.length,
       }, opts.headers || {}),
     }, res => {
       let data = '';
@@ -111,10 +190,27 @@ async function getXToken() {
 
 // ── Platforms ─────────────────────────────────────────────────────────────────
 
-async function postDiscord(url, message) {
+const DISCORD_MAX_BYTES  = 20 * 1024 * 1024; // free-tier cap as of Aug 2026; boosted servers allow more
+const TELEGRAM_MAX_BYTES = 50 * 1024 * 1024; // standard cloud Bot API cap
+
+async function postDiscord(url, message, videoPath) {
   const token   = process.env.DISCORD_BOT_TOKEN;
   const channel = process.env.DISCORD_CHANNEL_ID;
   if (!token || !channel) return { platform: 'Discord', skipped: true };
+
+  if (videoPath && fs.statSync(videoPath).size <= DISCORD_MAX_BYTES) {
+    const res = await postMultipart(
+      `https://discord.com/api/v10/channels/${channel}/messages`,
+      { headers: { Authorization: `Bot ${token}` } },
+      [
+        { name: 'payload_json', value: JSON.stringify({ content: message }) },
+        { name: 'files[0]', filename: 'video.mp4', contentType: 'video/mp4', data: fs.readFileSync(videoPath) },
+      ],
+    );
+    if (res.status === 200) return { platform: 'Discord', status: res.status, ok: true, attachedVideo: true };
+    console.warn('  Discord video attach failed, falling back to link:', res.status, res.body.slice(0, 200));
+  }
+
   const res = await post(
     `https://discord.com/api/v10/channels/${channel}/messages`,
     { headers: { Authorization: `Bot ${token}` } },
@@ -123,10 +219,26 @@ async function postDiscord(url, message) {
   return { platform: 'Discord', status: res.status, ok: res.status === 200 };
 }
 
-async function postTelegram(url, message) {
+async function postTelegram(url, message, videoPath) {
   const token  = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return { platform: 'Telegram', skipped: true };
+
+  if (videoPath && fs.statSync(videoPath).size <= TELEGRAM_MAX_BYTES) {
+    const res = await postMultipart(
+      `https://api.telegram.org/bot${token}/sendVideo`,
+      {},
+      [
+        { name: 'chat_id', value: chatId },
+        { name: 'caption', value: message },
+        { name: 'video', filename: 'video.mp4', contentType: 'video/mp4', data: fs.readFileSync(videoPath) },
+      ],
+    );
+    const body = JSON.parse(res.body);
+    if (body.ok) return { platform: 'Telegram', status: res.status, ok: true, attachedVideo: true };
+    console.warn('  Telegram video attach failed, falling back to link:', res.status, res.body.slice(0, 200));
+  }
+
   const res = await post(
     `https://api.telegram.org/bot${token}/sendMessage`,
     {},
@@ -136,10 +248,170 @@ async function postTelegram(url, message) {
   return { platform: 'Telegram', status: res.status, ok: body.ok };
 }
 
-async function postX(url, message) {
+// ── X chunked video upload (v1.1, OAuth 1.0a) ────────────────────────────────
+// POST /2/tweets can't take a raw file - video has to be uploaded separately
+// first (INIT -> APPEND each <=5MB chunk -> FINALIZE -> poll STATUS until
+// server-side processing finishes), then the resulting media_id is
+// referenced when creating the tweet via the v2 endpoint. This is the
+// classic, long-stable v1.1 media endpoint - the newer-looking /2/media/
+// upload path returned a bare, reason-less 403 in testing, and OAuth 2.0
+// has no media scope at all, so v1.1 is what's actually live. It needs
+// OAuth 1.0a request signing (a separate credential pair from the OAuth
+// 2.0 ones the rest of this file uses for posting the tweet itself).
+
+const X_CHUNK_BYTES = 4 * 1024 * 1024; // stay comfortably under the 5MB/segment cap
+
+function oauth1PercentEncode(str) {
+  // RFC 3986 encoding per the OAuth 1.0a spec - encodeURIComponent alone
+  // doesn't escape ! * ' ( ), which OAuth 1.0a requires escaped too.
+  return encodeURIComponent(str).replace(/[!*'()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+function oauth1Header({ method, url, params = {}, consumerKey, consumerSecret, token, tokenSecret }) {
+  const oauthParams = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: crypto.randomBytes(16).toString('hex'),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: String(Math.floor(Date.now() / 1000)),
+    oauth_token: token,
+    oauth_version: '1.0',
+  };
+  const allParams = Object.assign({}, params, oauthParams);
+  const paramString = Object.keys(allParams).sort()
+    .map(k => `${oauth1PercentEncode(k)}=${oauth1PercentEncode(allParams[k])}`)
+    .join('&');
+  const baseUrl = url.split('?')[0];
+  const baseString = `${method.toUpperCase()}&${oauth1PercentEncode(baseUrl)}&${oauth1PercentEncode(paramString)}`;
+  const signingKey = `${oauth1PercentEncode(consumerSecret)}&${oauth1PercentEncode(tokenSecret)}`;
+  const signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
+
+  const headerParams = Object.assign({}, oauthParams, { oauth_signature: signature });
+  return 'OAuth ' + Object.keys(headerParams).sort()
+    .map(k => `${oauth1PercentEncode(k)}="${oauth1PercentEncode(headerParams[k])}"`)
+    .join(', ');
+}
+
+function getXOAuth1Creds() {
+  const consumerKey = process.env.X_OAUTH1_CONSUMER_KEY;
+  const consumerSecret = process.env.X_OAUTH1_CONSUMER_SECRET;
+  const token = process.env.X_OAUTH1_ACCESS_TOKEN;
+  const tokenSecret = process.env.X_OAUTH1_ACCESS_TOKEN_SECRET;
+  if (!consumerKey || !consumerSecret || !token || !tokenSecret) return null;
+  return { consumerKey, consumerSecret, token, tokenSecret };
+}
+
+// Query-string params ARE part of what OAuth 1.0a signs; multipart body
+// fields are NOT (only application/x-www-form-urlencoded bodies are) -
+// which is exactly why command/media_id/etc. go on the query string here
+// instead of in a JSON or form body, matching how this endpoint has always
+// worked.
+function xOAuth1Request(method, path, queryParams, creds, multipartFields) {
+  return new Promise((resolve, reject) => {
+    const qs = new URLSearchParams(queryParams).toString();
+    const fullUrl = `https://upload.twitter.com${path}${qs ? '?' + qs : ''}`;
+    const authHeader = oauth1Header({
+      method, url: fullUrl, params: queryParams,
+      consumerKey: creds.consumerKey, consumerSecret: creds.consumerSecret,
+      token: creds.token, tokenSecret: creds.tokenSecret,
+    });
+
+    let body = null;
+    const headers = { Authorization: authHeader };
+    if (multipartFields) {
+      const boundary = `----e3dpod2vid${Date.now()}${Math.random().toString(16).slice(2)}`;
+      const parts = [];
+      for (const field of multipartFields) {
+        if (field.filename) {
+          parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${field.name}"; filename="${field.filename}"\r\nContent-Type: ${field.contentType || 'application/octet-stream'}\r\n\r\n`));
+          parts.push(field.data);
+          parts.push(Buffer.from('\r\n'));
+        } else {
+          parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${field.name}"\r\n\r\n${field.value}\r\n`));
+        }
+      }
+      parts.push(Buffer.from(`--${boundary}--\r\n`));
+      body = Buffer.concat(parts);
+      headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
+      headers['Content-Length'] = body.length;
+    } else {
+      headers['Content-Length'] = 0;
+    }
+
+    const u = new URL(fullUrl);
+    const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, port: 443, method, headers }, res => {
+      let data = '';
+      res.on('data', d => (data += d));
+      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function xUploadVideo(videoPath) {
+  const creds = getXOAuth1Creds();
+  if (!creds) throw new Error('X_OAUTH1_* credentials not configured');
+  const buf = fs.readFileSync(videoPath);
+
+  const init = await xOAuth1Request('POST', '/1.1/media/upload.json', {
+    command: 'INIT', total_bytes: String(buf.length), media_type: 'video/mp4', media_category: 'tweet_video',
+  }, creds);
+  const initBody = JSON.parse(init.body);
+  const mediaId = initBody.media_id_string;
+  if (!mediaId) throw new Error(`X media INIT failed: ${init.status} ${init.body.slice(0, 300)}`);
+
+  let segmentIndex = 0;
+  for (let offset = 0; offset < buf.length; offset += X_CHUNK_BYTES) {
+    const chunk = buf.subarray(offset, Math.min(offset + X_CHUNK_BYTES, buf.length));
+    const res = await xOAuth1Request('POST', '/1.1/media/upload.json', {
+      command: 'APPEND', media_id: mediaId, segment_index: String(segmentIndex),
+    }, creds, [
+      { name: 'media', filename: 'chunk.mp4', contentType: 'video/mp4', data: chunk },
+    ]);
+    if (res.status >= 300) throw new Error(`X media APPEND segment ${segmentIndex} failed: ${res.status} ${res.body.slice(0, 300)}`);
+    segmentIndex += 1;
+  }
+
+  const fin = await xOAuth1Request('POST', '/1.1/media/upload.json', { command: 'FINALIZE', media_id: mediaId }, creds);
+  if (fin.status >= 300) throw new Error(`X media FINALIZE failed: ${fin.status} ${fin.body.slice(0, 300)}`);
+  let finBody = JSON.parse(fin.body);
+
+  let state = finBody.processing_info && finBody.processing_info.state;
+  const deadline = Date.now() + 120_000;
+  while (state && state !== 'succeeded' && state !== 'failed' && Date.now() < deadline) {
+    const checkAfter = (finBody.processing_info.check_after_secs || 2) * 1000;
+    await new Promise(r => setTimeout(r, checkAfter));
+    const statusRes = await xOAuth1Request('GET', '/1.1/media/upload.json', { command: 'STATUS', media_id: mediaId }, creds);
+    finBody = JSON.parse(statusRes.body);
+    state = finBody.processing_info && finBody.processing_info.state;
+  }
+  if (state === 'failed') throw new Error(`X media processing failed: ${JSON.stringify((finBody.processing_info && finBody.processing_info.error) || finBody)}`);
+
+  return mediaId;
+}
+
+async function postX(url, message, videoPath) {
   const token = await getXToken();
   if (!token) return { platform: 'X (Twitter)', skipped: true };
   const tweet = message.length <= 280 ? message : message.slice(0, 277) + '...';
+
+  if (videoPath && getXOAuth1Creds()) {
+    try {
+      const mediaId = await xUploadVideo(videoPath);
+      const res = await post(
+        'https://api.twitter.com/2/tweets',
+        { headers: { Authorization: `Bearer ${token}` } },
+        { text: tweet, media: { media_ids: [mediaId] } },
+      );
+      const body = JSON.parse(res.body);
+      if (body.data?.id) return { platform: 'X (Twitter)', status: res.status, ok: true, attachedVideo: true };
+      console.warn('  X tweet-with-video failed, falling back to text-only:', res.status, res.body.slice(0, 200));
+    } catch (err) {
+      console.warn('  X video upload failed, falling back to text-only:', err.message);
+    }
+  }
+
   const res = await post(
     'https://api.twitter.com/2/tweets',
     { headers: { Authorization: `Bearer ${token}` } },
@@ -185,7 +457,25 @@ async function postMoltbook(url, message) {
     { headers: { 'x-api-key': key } },
     { title, content: message, submolt_name: submolt, type: 'text' },
   );
-  return { platform: 'Moltbook', status: res.status, ok: res.status === 200 || res.status === 201 };
+  if (res.status !== 200 && res.status !== 201) {
+    return { platform: 'Moltbook', status: res.status, ok: false };
+  }
+  const body = JSON.parse(res.body);
+  const post_ = body.post || {};
+  // A 200/201 here does NOT mean the post is live - Moltbook requires
+  // solving a math-puzzle verification challenge (POST /verify with
+  // post.verification.verification_code) within 5 minutes, or the post
+  // stays permanently "pending" and invisible in feeds/search. Confirmed
+  // the hard way: an earlier automated post reported success here and
+  // sat unverified until its window expired. This function doesn't
+  // attempt to solve the challenge (it's deliberately obfuscated,
+  // inconsistent between addition/multiplication, and not reliably
+  // regex-parseable) - it just reports honestly instead of lying.
+  if (post_.verification_status === 'pending') {
+    console.warn(`  Moltbook: post ${post_.id} created but NOT yet visible - needs manual verification within 5 min. Challenge: ${post_.verification?.challenge_text}`);
+    return { platform: 'Moltbook', status: res.status, ok: false, needsVerification: true, postId: post_.id, verificationCode: post_.verification?.verification_code, challengeText: post_.verification?.challenge_text };
+  }
+  return { platform: 'Moltbook', status: res.status, ok: true };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -199,22 +489,25 @@ async function run() {
   if (xMessage !== message) {
     console.log(`X message override: ${xMessage.slice(0, 80)}${xMessage.length > 80 ? '...' : ''}\n`);
   }
+  if (VIDEO_PATH) {
+    console.log(`Video: ${VIDEO_PATH} (${(fs.statSync(VIDEO_PATH).size / 1_000_000).toFixed(1)} MB) - attaching natively where supported\n`);
+  }
 
   const results = await Promise.allSettled([
-    postDiscord(YT_URL, message),
-    postTelegram(YT_URL, message),
-    postX(YT_URL, xMessage),
+    postDiscord(YT_URL, message, VIDEO_PATH),
+    postTelegram(YT_URL, message, VIDEO_PATH),
+    postX(YT_URL, xMessage, VIDEO_PATH),
     postMoltbook(YT_URL, message),
     postLinkedIn(YT_URL, message),
   ]);
 
   for (const r of results) {
     if (r.status === 'fulfilled') {
-      const { platform, skipped, ok, status } = r.value;
+      const { platform, skipped, ok, status, attachedVideo } = r.value;
       if (skipped) {
         console.log(`  ${platform}: skipped (no credentials configured)`);
       } else if (ok) {
-        console.log(`  ${platform}: posted ✓`);
+        console.log(`  ${platform}: posted ✓${attachedVideo ? ' (video attached)' : ''}`);
       } else {
         console.log(`  ${platform}: FAILED (HTTP ${status})`);
       }

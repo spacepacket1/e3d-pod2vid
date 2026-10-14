@@ -58,6 +58,11 @@ except ImportError:
 ASSEMBLYAI_KEY = os.environ.get('ASSEMBLYAI_API_KEY', '')
 OPENAI_KEY     = os.environ.get('OPENAI_API_KEY', '')
 PEXELS_KEY     = os.environ.get('PEXELS_API_KEY', '')
+BROLL_PROVIDER = os.environ.get('BROLL_PROVIDER', 'pexels').lower()   # pexels | higgsfield
+HF_MAX_CLIPS   = int(os.environ.get('HIGGSFIELD_MAX_CLIPS', '8'))      # spend cap per run
+HF_DURATION    = int(os.environ.get('HIGGSFIELD_DURATION', '5'))
+HF_STYLE       = os.environ.get('HIGGSFIELD_STYLE', 'cinematic, soft volumetric light, shallow depth of field, slow camera move, no text, no logos, no real faces')
+HF_DRY_RUN     = os.environ.get('HIGGSFIELD_DRY_RUN', '') == '1'
 FFMPEG         = os.environ.get('FFMPEG_PATH', 'ffmpeg')
 
 AUDIO_IN   = sys.argv[1] if len(sys.argv) > 1 else ''
@@ -220,12 +225,42 @@ def pexels_fetch(query):
             return hd['link'], v['id']
     return None, None
 
+def higgsfield_name(query):
+    return 'hf_' + query_cache_name(query)
+
 def download_clips(queries):
     BROLL_DIR.mkdir(parents=True, exist_ok=True)
     clip_map = {}
     unique   = list(dict.fromkeys(queries))
-    log(f'Fetching clips for {len(unique)} unique queries...')
+    use_hf   = BROLL_PROVIDER == 'higgsfield'
+    hf_spent = 0
+    log(f'Fetching clips for {len(unique)} unique queries ({BROLL_PROVIDER})...')
+    if use_hf:
+        new = [q for q in unique if not (BROLL_DIR / higgsfield_name(q)).exists()]
+        log(f'  Higgsfield: {len(new)} uncached prompts, cap {HF_MAX_CLIPS} generations '
+            f'x {HF_DURATION}s (paid); the rest fall back to Pexels when configured')
+        if HF_DRY_RUN:
+            sys.exit('HIGGSFIELD_DRY_RUN=1: stopping before any paid generation.')
     for query in unique:
+        if use_hf:
+            hf_path = BROLL_DIR / higgsfield_name(query)
+            if hf_path.exists():
+                log(f'  cached (higgsfield): "{query}"')
+                clip_map[query] = str(hf_path)
+                continue
+            if hf_spent < HF_MAX_CLIPS:
+                try:
+                    from providers import higgsfield
+                    log(f'  generating ({hf_spent + 1}/{HF_MAX_CLIPS}): "{query}"')
+                    higgsfield.generate_video(f'{query}, {HF_STYLE}', str(hf_path), duration=HF_DURATION)
+                    hf_spent += 1
+                    clip_map[query] = str(hf_path)
+                    continue
+                except Exception as e:
+                    hf_spent += 1
+                    log(f'  higgsfield error "{query}": {e}')
+            if not PEXELS_KEY:
+                continue   # no Pexels fallback; make_clip reuses another clip
         path = BROLL_DIR / query_cache_name(query)
         if path.exists():
             log(f'  cached: "{query}"')
@@ -351,9 +386,12 @@ def write_srt(segments, srt_path):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run():
-    for key, name in [(ASSEMBLYAI_KEY, 'ASSEMBLYAI_API_KEY'),
-                      (OPENAI_KEY, 'OPENAI_API_KEY'),
-                      (PEXELS_KEY, 'PEXELS_API_KEY')]:
+    if BROLL_PROVIDER not in ('pexels', 'higgsfield'):
+        sys.exit(f'Error: unknown BROLL_PROVIDER {BROLL_PROVIDER!r} (pexels | higgsfield)')
+    required = [(ASSEMBLYAI_KEY, 'ASSEMBLYAI_API_KEY'), (OPENAI_KEY, 'OPENAI_API_KEY')]
+    required.append((os.environ.get('HIGGSFIELD_API_KEY', ''), 'HIGGSFIELD_API_KEY')
+                    if BROLL_PROVIDER == 'higgsfield' else (PEXELS_KEY, 'PEXELS_API_KEY'))
+    for key, name in required:
         if not key:
             sys.exit(f'Error: {name} not set. Copy .env.example to .env and fill in your keys.')
     if not AUDIO_IN or not Path(AUDIO_IN).exists():
@@ -392,7 +430,7 @@ def run():
     clip_map = download_clips(queries)
     fallback = next(iter(clip_map.values())) if clip_map else None
     if not fallback:
-        sys.exit('Error: no Pexels clips downloaded — check PEXELS_API_KEY')
+        sys.exit('Error: no B-roll clips downloaded — check PEXELS_API_KEY / HIGGSFIELD_API_KEY')
 
     # 4. Pre-render subtitles
     log(f'Rendering {len(segments)} subtitle overlays...')

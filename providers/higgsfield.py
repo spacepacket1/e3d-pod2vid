@@ -87,7 +87,7 @@ def generate_video(prompt, out_path, *, model=None, duration=6, image_url=None,
     """Generate one clip and save it as `out_path`. Output URLs live >= 7 days upstream."""
     model = model or os.environ.get('HIGGSFIELD_MODEL', DEFAULT_MODEL)
     args = {'prompt': prompt, 'duration': duration}
-    if 'kling' in model:
+    if 'kling' in model and 'v2.5' in model:
         args['negative_prompt'] = negative_prompt
     if image_url:
         args['image_url'] = image_url
@@ -110,3 +110,16 @@ def generate_image(prompt, out_path, *, model='higgsfield-ai/soul/standard', asp
         raise HiggsfieldError('completed response had no images[0].url')
     download(url, out_path)
     return url
+
+
+def generate_images(prompt, out_prefix, *, n=4, model='higgsfield-ai/soul/standard', aspect_ratio='16:9'):
+    """Generate n candidate stills; saves out_prefix_0.png ... and returns [(path, url), ...]."""
+    res = wait(submit(model, {'prompt': prompt, 'aspect_ratio': aspect_ratio, 'num_images': n}))
+    if res.get('status') != 'completed':
+        raise HiggsfieldError(f'generation {res.get("status")}: {res.get("error", "")}')
+    out = []
+    for k, im in enumerate(res.get('images') or []):
+        path = f'{out_prefix}_{k}.png'
+        download(im['url'], path)
+        out.append((path, im['url']))
+    return out

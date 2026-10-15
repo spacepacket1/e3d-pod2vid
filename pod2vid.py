@@ -22,7 +22,8 @@ Usage:
 
 Environment variables (set in .env or export):
   ASSEMBLYAI_API_KEY
-  OPENAI_API_KEY
+  OPENAI_API_KEY   (TTS only)
+  CLAUDE_API_KEY   (B-roll query generation)
   PEXELS_API_KEY
 
 Optional:
@@ -56,7 +57,8 @@ except ImportError:
 # ── Config ────────────────────────────────────────────────────────────────────
 
 ASSEMBLYAI_KEY = os.environ.get('ASSEMBLYAI_API_KEY', '')
-OPENAI_KEY     = os.environ.get('OPENAI_API_KEY', '')
+OPENAI_KEY     = os.environ.get('OPENAI_API_KEY', '')   # TTS only
+CLAUDE_KEY     = os.environ.get('CLAUDE_API_KEY', '')
 PEXELS_KEY     = os.environ.get('PEXELS_API_KEY', '')
 BROLL_PROVIDER = os.environ.get('BROLL_PROVIDER', 'pexels').lower()   # pexels | higgsfield
 HF_MAX_CLIPS   = int(os.environ.get('HIGGSFIELD_MAX_CLIPS', '8'))      # spend cap per run
@@ -176,23 +178,17 @@ Return ONLY a JSON array of query strings, one per segment, in order."""
 def generate_queries_batch(batch, offset):
     items = [{'i': offset + i, 'speaker': s['speaker'], 'text': s['text'][:200]}
              for i, s in enumerate(batch)]
-    body = json.dumps({
-        'model': 'gpt-4o-mini',
-        'max_tokens': 800,
-        'messages': [
-            {'role': 'system', 'content': QUERY_SYSTEM},
-            {'role': 'user', 'content':
-             f'Generate a Pexels query for each of these {len(items)} segments:\n' +
-             json.dumps(items, indent=2)},
-        ],
-    })
-    r = http_json(
-        'https://api.openai.com/v1/chat/completions',
-        method='POST',
-        headers={'Authorization': f'Bearer {OPENAI_KEY}', 'Content-Type': 'application/json'},
-        body=body, timeout=60,
+    import anthropic
+    r = anthropic.Anthropic(api_key=CLAUDE_KEY, timeout=60).messages.create(
+        model='claude-haiku-5-5',
+        thinking={'type': 'disabled'},  # thinking tokens would eat max_tokens
+        max_tokens=800,
+        system=QUERY_SYSTEM,
+        messages=[{'role': 'user', 'content':
+                   f'Generate a Pexels query for each of these {len(items)} segments:\n' +
+                   json.dumps(items, indent=2)}],
     )
-    content = r['choices'][0]['message']['content'].strip()
+    content = ''.join(b.text for b in r.content if b.type == 'text').strip()
     start, end = content.find('['), content.rfind(']') + 1
     queries = json.loads(content[start:end])
     while len(queries) < len(batch):
@@ -203,7 +199,7 @@ def generate_queries(segments, batch_size=40):
     queries = []
     for i in range(0, len(segments), batch_size):
         batch = segments[i:i + batch_size]
-        log(f'  GPT batch {i // batch_size + 1}: segments {i}–{i + len(batch) - 1}')
+        log(f'  Claude batch {i // batch_size + 1}: segments {i}–{i + len(batch) - 1}')
         queries.extend(generate_queries_batch(batch, i))
     return queries
 
@@ -388,7 +384,9 @@ def write_srt(segments, srt_path):
 def run():
     if BROLL_PROVIDER not in ('pexels', 'higgsfield'):
         sys.exit(f'Error: unknown BROLL_PROVIDER {BROLL_PROVIDER!r} (pexels | higgsfield)')
-    required = [(ASSEMBLYAI_KEY, 'ASSEMBLYAI_API_KEY'), (OPENAI_KEY, 'OPENAI_API_KEY')]
+    required = [(ASSEMBLYAI_KEY, 'ASSEMBLYAI_API_KEY'),
+                (OPENAI_KEY, 'OPENAI_API_KEY'),
+                (CLAUDE_KEY, 'CLAUDE_API_KEY')]
     required.append((os.environ.get('HIGGSFIELD_API_KEY', ''), 'HIGGSFIELD_API_KEY')
                     if BROLL_PROVIDER == 'higgsfield' else (PEXELS_KEY, 'PEXELS_API_KEY'))
     for key, name in required:

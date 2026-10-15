@@ -21,7 +21,8 @@ Usage:
 Environment variables:
   MAPS_URL              (default: https://maps.e3d.ai)
   MAPS_INTERNAL_KEY     API key for maps.e3d.ai
-  OPENAI_API_KEY
+  OPENAI_API_KEY   (TTS only)
+  CLAUDE_API_KEY   (script generation)
   PEXELS_API_KEY
   YT_CLIENT_SECRET      path to youtube-client-secret.json
   YT_TOKEN_FILE         path to youtube-tokens.json
@@ -32,6 +33,7 @@ Environment variables:
 
 import hashlib
 import json
+import re
 import os
 import subprocess
 import sys
@@ -53,7 +55,8 @@ except ImportError:
 
 MAPS_URL   = os.environ.get('MAPS_URL', 'https://maps.e3d.ai')
 MAPS_KEY   = os.environ.get('MAPS_INTERNAL_KEY', '')
-OPENAI_KEY = os.environ.get('OPENAI_API_KEY', '')
+OPENAI_KEY = os.environ.get('OPENAI_API_KEY', '')   # TTS only
+CLAUDE_KEY = os.environ.get('CLAUDE_API_KEY', '')
 PEXELS_KEY = os.environ.get('PEXELS_API_KEY', '')
 
 CONF_THRESHOLD = float(os.environ.get('CONF_THRESHOLD', '0.78'))
@@ -233,17 +236,16 @@ def generate_script(signal, mode):
 
     user_msg = f'Generate the Short script for this signal:\n{json.dumps(context, indent=2)}'
 
-    r = http_post('https://api.openai.com/v1/chat/completions', {
-        'model': 'gpt-4o-mini',
-        'max_tokens': 1000,
-        'response_format': {'type': 'json_object'},
-        'messages': [
-            {'role': 'system', 'content': SCRIPT_SYSTEM},
-            {'role': 'user',   'content': user_msg},
-        ],
-    }, {'Authorization': f'Bearer {OPENAI_KEY}'})
-
-    content = r['choices'][0]['message']['content']
+    import anthropic
+    r = anthropic.Anthropic(api_key=CLAUDE_KEY, timeout=60).messages.create(
+        model='claude-haiku-5-5',
+        thinking={'type': 'disabled'},  # thinking tokens would eat max_tokens
+        max_tokens=1000,
+        system=SCRIPT_SYSTEM + '\n\nRespond with a single JSON object only, no markdown fences.',
+        messages=[{'role': 'user', 'content': user_msg}],
+    )
+    content = ''.join(b.text for b in r.content if b.type == 'text').strip()
+    content = re.sub(r'^```(?:json)?\s*|\s*```$', '', content)
     return json.loads(content)
 
 # ── Render via make_short pipeline ────────────────────────────────────────────
@@ -306,7 +308,7 @@ def announce(yt_url, message):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run():
-    for key, name in [(OPENAI_KEY,'OPENAI_API_KEY'),(PEXELS_KEY,'PEXELS_API_KEY')]:
+    for key, name in [(OPENAI_KEY,'OPENAI_API_KEY'),(CLAUDE_KEY,'CLAUDE_API_KEY'),(PEXELS_KEY,'PEXELS_API_KEY')]:
         if not key: sys.exit(f'Error: {name} not set')
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)

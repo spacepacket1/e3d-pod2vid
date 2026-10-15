@@ -46,31 +46,31 @@ PRESETS = {
         "kind": "audio",
         "aspect": "16:9",
         "video_size": (1920, 1080),
-        "required_keys": ["OPENAI_API_KEY", "PEXELS_API_KEY"],
+        "required_keys": ["OPENAI_API_KEY", "CLAUDE_API_KEY", "PEXELS_API_KEY"],
     },
     "short": {
         "kind": "audio",
         "aspect": "9:16",
         "video_size": (1080, 1920),
-        "required_keys": ["OPENAI_API_KEY", "PEXELS_API_KEY"],
+        "required_keys": ["OPENAI_API_KEY", "CLAUDE_API_KEY", "PEXELS_API_KEY"],
     },
     "tts_video": {
         "kind": "transcript",
         "aspect": "16:9",
         "video_size": (1920, 1080),
-        "required_keys": ["OPENAI_API_KEY", "PEXELS_API_KEY"],
+        "required_keys": ["OPENAI_API_KEY", "CLAUDE_API_KEY", "PEXELS_API_KEY"],
     },
     "transcript_video": {
         "kind": "transcript",
         "aspect": "16:9",
         "video_size": (1920, 1080),
-        "required_keys": ["OPENAI_API_KEY", "PEXELS_API_KEY"],
+        "required_keys": ["OPENAI_API_KEY", "CLAUDE_API_KEY", "PEXELS_API_KEY"],
     },
     "transcript_short": {
         "kind": "transcript",
         "aspect": "9:16",
         "video_size": (1080, 1920),
-        "required_keys": ["OPENAI_API_KEY", "PEXELS_API_KEY"],
+        "required_keys": ["OPENAI_API_KEY", "CLAUDE_API_KEY", "PEXELS_API_KEY"],
     },
 }
 REVISION_TYPES = {"thumbnail", "metadata", "subtitle_style"}

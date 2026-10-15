@@ -98,3 +98,15 @@ def generate_video(prompt, out_path, *, model=None, duration=6, image_url=None,
     if not url:
         raise HiggsfieldError('completed response had no video.url')
     return download(url, out_path)
+
+
+def generate_image(prompt, out_path, *, model='higgsfield-ai/soul/standard', aspect_ratio='16:9'):
+    """Generate one still; saves it to out_path and returns its (temporary, >= 7 day) URL."""
+    res = wait(submit(model, {'prompt': prompt, 'aspect_ratio': aspect_ratio, 'num_images': 1}))
+    if res.get('status') != 'completed':
+        raise HiggsfieldError(f'generation {res.get("status")}: {res.get("error", "")}')
+    url = ((res.get('images') or [{}])[0]).get('url')
+    if not url:
+        raise HiggsfieldError('completed response had no images[0].url')
+    download(url, out_path)
+    return url

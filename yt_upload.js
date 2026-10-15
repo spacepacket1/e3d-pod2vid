@@ -14,6 +14,7 @@
  *   YT_PRIVACY         unlisted | public | private (default: public)
  *   YT_CATEGORY        YouTube category ID (default: 28 = Science & Technology)
  *   YT_TAGS            comma-separated tags (default: AI,podcast,autonomous vehicles)
+ *   YT_SYNTHETIC       1 = label the video as containing realistic AI-generated/altered content
  */
 
 'use strict';
@@ -160,7 +161,13 @@ async function run() {
       title: TITLE, description: DESCRIPTION,
       tags: TAGS, categoryId: CATEGORY,
     },
-    status: { privacyStatus: PRIVACY },
+    status: {
+      privacyStatus: PRIVACY,
+      selfDeclaredMadeForKids: false,
+      // YouTube requires disclosure of realistic AI-generated or altered content.
+      // YT_SYNTHETIC=1 sets the "altered or synthetic content" label.
+      ...(process.env.YT_SYNTHETIC === '1' ? { containsSyntheticMedia: true } : {}),
+    },
   };
 
   const uploadUrl = await initResumable(tokens.access_token, metadata, fileSize);

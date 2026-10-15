@@ -96,7 +96,7 @@ async function uploadThumbnail(videoId, thumbPath, token) {
   const boundary = 'e3dpod2vid_boundary';
   const header  = Buffer.from(
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{}\r\n` +
-    `--${boundary}\r\nContent-Type: image/png\r\n\r\n`,
+    `--${boundary}\r\nContent-Type: ${/\.jpe?g$/i.test(thumbPath) ? 'image/jpeg' : 'image/png'}\r\n\r\n`,
   );
   const footer  = Buffer.from(`\r\n--${boundary}--`);
   const payload = Buffer.concat([header, data, footer]);

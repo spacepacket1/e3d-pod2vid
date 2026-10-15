@@ -66,6 +66,31 @@ Available voices: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
 
 ---
 
+### 2b. (Optional) ElevenLabs voices and Higgsfield B-roll
+
+```bash
+# Voices: list yours, then synthesize with them
+python3 -m providers.elevenlabs voices
+python3 -m providers.elevenlabs status        # tier, character quota, cloning availability
+ELEVENLABS_VOICE_A=<id> ELEVENLABS_VOICE_B=<id> TTS_PROVIDER=elevenlabs \
+  python3 tts_replace.py output/episode-diarization.json episode-tts
+
+# Instant voice clone from your OWN audio (account plan must allow cloning)
+python3 -m providers.elevenlabs clone "My Name" sample1.mp3 sample2.mp3
+
+# Generated B-roll instead of stock footage (PAID per clip; capped per run)
+HIGGSFIELD_DRY_RUN=1 BROLL_PROVIDER=higgsfield python3 pod2vid.py output/episode-tts.mp3 output/episode-tts.mp4
+BROLL_PROVIDER=higgsfield HIGGSFIELD_MAX_CLIPS=6 python3 pod2vid.py output/episode-tts.mp3 output/episode-tts.mp4
+```
+
+`HIGGSFIELD_DRY_RUN=1` reports how many uncached prompts would be generated and
+stops before spending anything. Generated clips are cached in `output/broll/`
+(`hf_*.mp4`); prompts beyond `HIGGSFIELD_MAX_CLIPS` fall back to Pexels if
+`PEXELS_API_KEY` is set, otherwise an existing clip is reused. Only clone the
+voice of a person who has consented (for example, your own).
+
+---
+
 ### 3. Generate a YouTube Short from an E3D Maps signal (automated)
 
 ```bash

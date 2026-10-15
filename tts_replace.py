@@ -19,10 +19,17 @@ Then render:
   python3 pod2vid.py output/<stem>.mp3 output/<stem>.mp4
 
 Environment variables:
+  TTS_PROVIDER (default: openai)  — openai | elevenlabs
   OPENAI_API_KEY
   VOICE_A   (default: onyx)   — OpenAI TTS voice for Speaker A
   VOICE_B   (default: nova)   — OpenAI TTS voice for Speaker B
   TTS_MODEL (default: tts-1-hd)
+
+ElevenLabs (TTS_PROVIDER=elevenlabs):
+  ELEVENLABS_API_KEY
+  ELEVENLABS_VOICE_A / ELEVENLABS_VOICE_B — voice ids
+      (list yours: python3 -m providers.elevenlabs voices)
+  ELEVENLABS_MODEL (default: eleven_multilingual_v2)
 
 Available voices: alloy, echo, fable, onyx, nova, shimmer
 """
@@ -43,17 +50,27 @@ except ImportError:
     pass
 
 OPENAI_KEY  = os.environ.get('OPENAI_API_KEY', '')
+PROVIDER    = os.environ.get('TTS_PROVIDER', 'openai').lower()
 FFMPEG      = os.environ.get('FFMPEG_PATH', 'ffmpeg')
 FFPROBE     = os.environ.get('FFPROBE_PATH', 'ffprobe')
 
 DIAR_FILE   = sys.argv[1] if len(sys.argv) > 1 else ''
 OUTPUT_STEM = sys.argv[2] if len(sys.argv) > 2 else 'tts-output'
 
-VOICES = {
-    'A': os.environ.get('VOICE_A', 'onyx'),
-    'B': os.environ.get('VOICE_B', 'nova'),
-}
-TTS_MODEL   = os.environ.get('TTS_MODEL', 'tts-1-hd')
+if PROVIDER == 'elevenlabs':
+    VOICES = {
+        'A': os.environ.get('ELEVENLABS_VOICE_A', ''),
+        'B': os.environ.get('ELEVENLABS_VOICE_B', ''),
+    }
+    TTS_MODEL   = os.environ.get('ELEVENLABS_MODEL', 'eleven_multilingual_v2')
+    SAMPLE_RATE = 44100
+else:
+    VOICES = {
+        'A': os.environ.get('VOICE_A', 'onyx'),
+        'B': os.environ.get('VOICE_B', 'nova'),
+    }
+    TTS_MODEL   = os.environ.get('TTS_MODEL', 'tts-1-hd')
+    SAMPLE_RATE = 24000
 SILENCE_MS  = 400
 MIN_DUR_MS  = 2000
 
@@ -70,6 +87,10 @@ def merge_short(utterances, min_ms=MIN_DUR_MS):
     return result
 
 def synthesize(text, voice, out_path):
+    if PROVIDER == 'elevenlabs':
+        from providers import elevenlabs
+        elevenlabs.synthesize(text, voice, out_path, model=TTS_MODEL)
+        return
     body = json.dumps({'model': TTS_MODEL, 'input': text,
                        'voice': voice, 'response_format': 'mp3'}).encode()
     req = urllib.request.Request(
@@ -91,13 +112,21 @@ def get_duration_ms(path):
 
 def make_silence(out_path, duration_ms):
     subprocess.run([FFMPEG, '-y', '-loglevel', 'error',
-                    '-f', 'lavfi', '-i', 'anullsrc=r=24000:cl=mono',
+                    '-f', 'lavfi', '-i', f'anullsrc=r={SAMPLE_RATE}:cl=mono',
                     '-t', str(duration_ms / 1000),
                     '-c:a', 'libmp3lame', '-b:a', '64k', str(out_path)], check=True)
 
 def run():
-    if not OPENAI_KEY:
+    if PROVIDER not in ('openai', 'elevenlabs'):
+        sys.exit(f'Error: unknown TTS_PROVIDER {PROVIDER!r} (openai | elevenlabs)')
+    if PROVIDER == 'openai' and not OPENAI_KEY:
         sys.exit('Error: OPENAI_API_KEY not set')
+    if PROVIDER == 'elevenlabs':
+        if not os.environ.get('ELEVENLABS_API_KEY'):
+            sys.exit('Error: ELEVENLABS_API_KEY not set')
+        if not VOICES['A'] or not VOICES['B']:
+            sys.exit('Error: set ELEVENLABS_VOICE_A and ELEVENLABS_VOICE_B '
+                     '(list voices: python3 -m providers.elevenlabs voices)')
     if not DIAR_FILE or not Path(DIAR_FILE).exists():
         sys.exit(f'Error: diarization file not found: {DIAR_FILE}')
 
@@ -108,10 +137,10 @@ def run():
     raw  = json.loads(Path(DIAR_FILE).read_text())['utterances']
     segs = merge_short(raw)
     log(f'{len(raw)} utterances -> {len(segs)} segments')
-    log(f'Voices: A={VOICES["A"]}, B={VOICES["B"]} ({TTS_MODEL})')
+    log(f'Provider: {PROVIDER}; voices: A={VOICES["A"]}, B={VOICES["B"]} ({TTS_MODEL})')
 
     # Silence clip
-    silence_path = tts_dir / f'silence_{SILENCE_MS}ms.mp3'
+    silence_path = tts_dir / f'silence_{SILENCE_MS}ms_{SAMPLE_RATE}.mp3'
     if not silence_path.exists():
         make_silence(silence_path, SILENCE_MS)
 
@@ -120,7 +149,7 @@ def run():
     seg_files = []
     for i, seg in enumerate(segs):
         voice = VOICES.get(seg['speaker'], 'alloy')
-        key   = hashlib.md5(f'{voice}:{seg["text"]}'.encode()).hexdigest()[:12]
+        key   = hashlib.md5(f'{PROVIDER}:{TTS_MODEL}:{voice}:{seg["text"]}'.encode()).hexdigest()[:12]
         out   = tts_dir / f'utt_{key}.mp3'
         if out.exists():
             log(f'  [{i+1}/{len(segs)}] {seg["speaker"]} cached ✓')

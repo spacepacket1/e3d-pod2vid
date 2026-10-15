@@ -13,7 +13,7 @@ import urllib.request
 import uuid
 
 BASE_URL = 'https://api.higgsfield.ai'
-DEFAULT_MODEL = 'kling-video/v2.5-turbo/standard/text-to-video'
+DEFAULT_MODEL = 'minimax/hailuo-2.3/standard/text-to-video'   # durations 6 or 10; Kling t2v is pro-tier only
 TERMINAL = {'completed', 'failed', 'nsfw', 'canceled'}
 
 
@@ -82,7 +82,7 @@ def download(url, out_path):
     return out_path
 
 
-def generate_video(prompt, out_path, *, model=None, duration=5, image_url=None,
+def generate_video(prompt, out_path, *, model=None, duration=6, image_url=None,
                    negative_prompt='text, watermark, logo, distorted faces'):
     """Generate one clip and save it as `out_path`. Output URLs live >= 7 days upstream."""
     model = model or os.environ.get('HIGGSFIELD_MODEL', DEFAULT_MODEL)

@@ -169,12 +169,12 @@ Outputs a 1280×720 PNG with title, accent stripe, and optional logo overlay. Pu
 
 Phase 3 adds `python3 bin/pod2vid-job.py <manifest.json>` for hosted-job execution. The wrapper:
 
-- validates a worker-facing manifest defined in [docs/pod2vid-job.schema.json](/home/ubuntu/e3d-pod2vid/docs/pod2vid-job.schema.json)
+- validates a worker-facing manifest defined in [docs/pod2vid-job.schema.json](docs/pod2vid-job.schema.json)
 - writes deterministic outputs under `POD2VID_STORAGE_DIR` (defaults to `/tmp/e3d-pod2vid`)
 - supports dry-run renders, transcript presets, thumbnail/metadata/subtitle-style revisions, archive manifests, and archive rehydration
 - emits structured JSON progress events on stdout for a higher-level daemon to consume
 
-See [docs/worker-wrapper.md](/home/ubuntu/e3d-pod2vid/docs/worker-wrapper.md) for the manifest fields, supported presets, and required API keys by preset.
+See [docs/worker-wrapper.md](docs/worker-wrapper.md) for the manifest fields, supported presets, and required API keys by preset.
 
 ---
 
@@ -430,4 +430,4 @@ Built by [E3D Maps](https://maps.e3d.ai) — AI-powered navigation for autonomou
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 FutCo LLC. Part of the [FutCo](https://futco.ai/projects) open-source ecosystem.

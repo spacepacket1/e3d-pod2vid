@@ -10,6 +10,8 @@ output/
 *.srt
 *.png
 !examples/*.png
+!assets/github-shots/*.png
+!assets/futco-growth-loop.png
 
 # Python
 __pycache__/

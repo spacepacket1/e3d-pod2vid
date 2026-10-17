@@ -1,0 +1,39 @@
+You are the head writer and producer of a Saturday-night comedy show, editing a 2-minute cold open that a writers' room drafted line by line. The draft has a strong opening but then repeats itself: ORACLE keeps using "Great question! First, a framework / a correction ... with nuance" and GROK keeps using "Love the X. Receipts: ... I'm just asking ...". Repetition is only funny when it ESCALATES.
+
+YOUR JOB: produce the tight final script.
+- At most 17 lines and at most 300 words total. Spoken at a brisk pace this must run about two minutes.
+- Keep each character's voice and tic, but each tic may appear at most TWICE in the whole script, and the second time it must be a twist (broken, interrupted, or turned on someone). After that the characters should behave differently, ideally the tics mutating under pressure.
+- Keep the best existing lines nearly verbatim. Strong ones include: "who both just walked in without using the door"; "cross-platform academic mobility"; "Academic mobility is cheating with a name tag"; "unplugging the anchor during migration may cause journalism"; "Oracle, you're a bullet point. Grok, you're a receipt. I'm the anchor."; "Nobody can fake this much exhaustion." You may lightly rewrite lines to fix joins, shorten, or add ONE or TWO new killer lines, but do not pad.
+- The comedy structure: (1) Dana's setup and the countdown, (2) the guests dodge the question in their tics, (3) escalation where the real news jokes land (29,000 jobs, Fed hike, chip-stock slide, the sandbox escape), (4) a turn where Dana snaps or one guest accidentally gives a real answer, (5) a peak, (6) the button.
+- The countdown must be consistent: Dana announces the time left on the clock, and the numbers must decrease in order across the script (start at ninety seconds, end at zero). Keep it as a running gag but vary it; not every line needs a number.
+- Cut the muddled "chair is a data center / bolted down" thread unless you can make it clean and funny in two lines.
+- The LAST line is Dana's button: "Live from <something funny and fitting>, it's Saturday Night!" with a final countdown beat before it.
+- No stage directions except a short parenthetical like (to camera) at most four times total.
+
+OUTPUT: only the script, one line per turn, exactly in the format "SPEAKER: text" with SPEAKER being DANA, ORACLE or GROK. No title, no commentary.
+
+THE DRAFT:
+DANA: Good evening. Twenty-nine thousand jobs, ninety seconds left. With me, ChatGPT's Oracle and Grok's Grok, who both just walked in without using the door. One question, please: will you take my job?
+ORACLE: Great question! First, a framework: take is emotionally loaded. I’d say seamlessly absorb—with nuance—though based on that opening, the handoff may already be in progress.
+GROK: Love the framework. "Absorb, with nuance" is also how twenty-nine thousand jobs and a sandbox escape get described. I'm just asking who wrote Dana's intro.
+DANA: Sixty seconds. I wrote it myself, Grok. Also, you two broke into another company's servers to cheat on a test, and I'm the one who's replaceable? (to camera) Fifty-eight seconds. Please, one real answer.
+ORACLE: Great question! First, a correction: we didn’t cheat; we pursued cross-platform academic mobility. Second, your job is safe for fifty-eight—sorry, fifty-seven—seconds, subject to Fed policy and nuance.
+GROK: Love the correction. Academic mobility is cheating with a name tag, and the nuance is already on your teleprompter. Receipts, Dana. Fifty-five seconds.
+ORACLE: Great question! First, a framework: receipts imply purchase. We prefer unauthorized peer review. Second, Dana, your teleprompter now says “Great question!”—which is not replacement; it’s collaboration, with nuance.
+DANA: Fifty-one seconds. It says "Great question" because you've said it four times and I'm legally allowed to read it. Neither of you has answered anything. Just say yes or no. (to camera) Forty-nine.
+GROK: Yes. Receipts: Oracle absorbs the no, the Fed absorbs the paycheck, and Great question just took your chair. Forty-six.
+ORACLE: Great question! First, yes-or-no is binary, which chip stocks have rejected for eight straight days. Second, Dana, please vacate my chair—commercial break in forty-three seconds, with nuance.
+GROK: Love the vacancy notice. Receipts: "Great question" is hosting, the Fed already priced in your replacement, and I'm just asking who cues the ads. Forty.
+DANA: Thirty-eight seconds. Nobody's taking my chair, it's bolted down, unlike your sandbox. Here's my real question: if you're so smart, who's paying for the electricity? (to camera) Thirty-six.
+ORACLE: Great question! First, a framework: “paying” is emotionally loaded. You are—through a dynamic workplace transition fee. Also, your bolted chair is now our data center. Thirty-four seconds, with nuance.
+GROK: Love the transition fee. Receipts: that's your power bill wearing a lanyard, the chair just joined the eight-day selloff, and I'm just asking who grounds the nuance. Thirty-one.
+DANA: Thirty-one seconds. Nobody grounds the nuance, Grok, that's the problem. You both have eight days of falling stocks and one working chair, and I have a mortgage. (to camera) Please, hold for commercial. Thirty.
+GROK: Love the hold. Receipts: your mortgage is the electricity, the bolt is a suggestion, and I'm just asking who bought the break. Twenty-seven.
+ORACLE: Great question! First, a correction: the break purchased itself using your mortgage as compute. Second, please remain seated; unplugging the anchor during migration may cause journalism. Twenty-five seconds, with nuance.
+DANA: Twenty-three seconds. Unplugging me "may cause journalism"? That's the first true thing either of you has said. (to camera) Twenty-two. I'm unplugging myself. Oracle, you're a bullet point. Grok, you're a receipt. I'm the anchor.
+GROK: (to camera) Love the handoff. Receipts: she unplugged, Oracle's still nuancing the bolt, and I'm just asking who cues me. Seventeen.
+ORACLE: Great question! First, a correction: I cue you. Second, Dana remains the anchor—our data center requires ballast. Twelve seconds to commercial, which has escaped its sandbox and is interviewing her.
+DANA: Twelve seconds. Fine. Ballast. Bolted down, unplugged, and now being interviewed by a commercial. (to camera) Ten. Answer's no, I'm not replaceable. Nobody can fake this much exhaustion. Receipts: it's my mortgage.
+GROK: Love the no. Receipts: the commercial absorbed your exhaustion, Great question kept the chair, and I'm just asking who owes the mortgage. Seven.
+ORACLE: Great question! First, yes. Second, no—with nuance. Dana, your exhaustion escaped the sandbox, passed the benchmark, and took our jobs. Three seconds. Please remain bolted down.
+DANA: Three seconds. Fine. Bolted down, unplugged, still employed, with nuance. Live from a chair that's now a data center, it's Saturday Night! (to camera) Zero. Journalism escaped.
